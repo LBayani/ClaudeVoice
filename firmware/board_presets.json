@@ -1,0 +1,6195 @@
+{
+ "aipi-lite": {
+  "label": "aipi-lite",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 128,
+    "height": 128,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": true,
+    "invert": false,
+    "rgb_order": "bgr",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 17,
+     "sclk": 16,
+     "cs": 15,
+     "dc": 7,
+     "rst": 18,
+     "bl": 3,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 6,
+    "bclk": 14,
+    "ws": 12,
+    "dout": 11,
+    "din": 13,
+    "pa": 9,
+    "i2c_sda": 5,
+    "i2c_scl": 4,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 42,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 46
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "aipi-lite"
+  ]
+ },
+ "atk-dnesp32s3": {
+  "label": "atk-dnesp32s3",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 320,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": 11,
+     "sclk": 12,
+     "cs": 21,
+     "dc": 40,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 3,
+    "bclk": 46,
+    "ws": 9,
+    "dout": 10,
+    "din": 14,
+    "pa": -1,
+    "i2c_sda": 41,
+    "i2c_scl": 42,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "atk-dnesp32s3"
+  ]
+ },
+ "atk-dnesp32s3-box": {
+  "label": "atk-dnesp32s3-box",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 320,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": 1,
+     "dc": 2,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": -1,
+    "bclk": 21,
+    "ws": 13,
+    "dout": 14,
+    "din": 47,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 4
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "atk-dnesp32s3-box"
+  ]
+ },
+ "atk-dnesp32s3-box0": {
+  "label": "atk-dnesp32s3-box0",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 40,
+     "sclk": 39,
+     "cs": 41,
+     "dc": 38,
+     "rst": -1,
+     "bl": 42,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 16000,
+    "out_rate": 16000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 13,
+    "bclk": 5,
+    "ws": 10,
+    "dout": 9,
+    "din": 6,
+    "pa": -1,
+    "i2c_sda": 11,
+    "i2c_scl": 12,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": -1,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "atk-dnesp32s3-box0"
+  ]
+ },
+ "atk-dnesp32s3-box2-4g": {
+  "label": "atk-dnesp32s3-box2-4g",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 320,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": 14,
+     "dc": 12,
+     "rst": -1,
+     "bl": 21,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 16000,
+    "out_rate": 16000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 38,
+    "bclk": 40,
+    "ws": 42,
+    "dout": 41,
+    "din": 39,
+    "pa": -1,
+    "i2c_sda": 48,
+    "i2c_scl": 47,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": -1,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "atk-dnesp32s3-box2-4g"
+  ]
+ },
+ "atk-dnesp32s3-box2-wifi": {
+  "label": "atk-dnesp32s3-box2-wifi",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 320,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": 14,
+     "dc": 12,
+     "rst": -1,
+     "bl": 21,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 16000,
+    "out_rate": 16000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 38,
+    "bclk": 40,
+    "ws": 42,
+    "dout": 41,
+    "din": 39,
+    "pa": -1,
+    "i2c_sda": 48,
+    "i2c_scl": 47,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": -1,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "atk-dnesp32s3-box2-wifi"
+  ]
+ },
+ "atom-echos3r": {
+  "label": "atom-echos3r",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 11,
+    "bclk": 17,
+    "ws": 3,
+    "dout": 48,
+    "din": 4,
+    "pa": -1,
+    "i2c_sda": 45,
+    "i2c_scl": 0,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": -1,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "atom-echos3r"
+  ]
+ },
+ "atommatrix-echo-base": {
+  "label": "atommatrix-echo-base",
+  "target": "esp32",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": -1,
+    "bclk": 33,
+    "ws": 19,
+    "dout": 22,
+    "din": 23,
+    "pa": -1,
+    "i2c_sda": 25,
+    "i2c_scl": 21,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 39,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 27
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "atommatrix-echo-base"
+  ]
+ },
+ "atoms3-echo-base": {
+  "label": "atoms3-echo-base",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "gc9a01",
+    "width": 128,
+    "height": 128,
+    "offset_x": 0,
+    "offset_y": 32,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 21,
+     "sclk": 17,
+     "cs": 15,
+     "dc": 33,
+     "rst": 34,
+     "bl": 16,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": -1,
+    "bclk": 8,
+    "ws": 6,
+    "dout": 5,
+    "din": 7,
+    "pa": -1,
+    "i2c_sda": 38,
+    "i2c_scl": 39,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 41,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "atoms3-echo-base"
+  ]
+ },
+ "atoms3r-cam-m12-echo-base": {
+  "label": "atoms3r-cam-m12-echo-base",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": true,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": -1,
+    "bclk": 8,
+    "ws": 6,
+    "dout": 5,
+    "din": 7,
+    "pa": -1,
+    "i2c_sda": 38,
+    "i2c_scl": 39,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 41,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "atoms3r-cam-m12-echo-base"
+  ]
+ },
+ "atoms3r-echo-base": {
+  "label": "atoms3r-echo-base",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "gc9a01",
+    "width": 128,
+    "height": 128,
+    "offset_x": 0,
+    "offset_y": 32,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": 21,
+     "sclk": 15,
+     "cs": 14,
+     "dc": 42,
+     "rst": 48,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": -1,
+    "bclk": 8,
+    "ws": 6,
+    "dout": 5,
+    "din": 7,
+    "pa": -1,
+    "i2c_sda": 38,
+    "i2c_scl": 39,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 41,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "atoms3r-echo-base"
+  ]
+ },
+ "bread-compact-esp32": {
+  "label": "bread-compact-esp32",
+  "target": "esp32",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ssd1306",
+    "width": 128,
+    "height": 64,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": 4,
+     "scl": 15
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 25,
+    "mic_sck": 26,
+    "mic_din": 32,
+    "spk_dout": 33,
+    "spk_bclk": 14,
+    "spk_lrck": 27,
+    "mclk": -1,
+    "bclk": 5,
+    "ws": 4,
+    "dout": 7,
+    "din": 6,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 2
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "bread-compact-esp32",
+   "bread-compact-esp32-128x32"
+  ]
+ },
+ "bread-compact-esp32-lcd": {
+  "label": "bread-compact-esp32-lcd",
+  "target": "esp32",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 320,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "bgr",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 4,
+     "sclk": 15,
+     "cs": 22,
+     "dc": 21,
+     "rst": 18,
+     "bl": 23,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 25,
+    "mic_sck": 26,
+    "mic_din": 32,
+    "spk_dout": 33,
+    "spk_bclk": 14,
+    "spk_lrck": 27,
+    "mclk": -1,
+    "bclk": 5,
+    "ws": 4,
+    "dout": 7,
+    "din": 6,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 2
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "bread-compact-esp32-lcd"
+  ]
+ },
+ "bread-compact-ml307": {
+  "label": "bread-compact-ml307",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ssd1306",
+    "width": 128,
+    "height": 64,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": 41,
+     "scl": 42
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 4,
+    "mic_sck": 5,
+    "mic_din": 6,
+    "spk_dout": 7,
+    "spk_bclk": 15,
+    "spk_lrck": 16,
+    "mclk": -1,
+    "bclk": 5,
+    "ws": 4,
+    "dout": 7,
+    "din": 6,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 40,
+    "volume_down": 39
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 48
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "bread-compact-ml307",
+   "bread-compact-ml307-128x64"
+  ]
+ },
+ "bread-compact-nt26": {
+  "label": "bread-compact-nt26",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ssd1306",
+    "width": 128,
+    "height": 64,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": 41,
+     "scl": 42
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 4,
+    "mic_sck": 5,
+    "mic_din": 6,
+    "spk_dout": 7,
+    "spk_bclk": 15,
+    "spk_lrck": 16,
+    "mclk": -1,
+    "bclk": 5,
+    "ws": 4,
+    "dout": 7,
+    "din": 6,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 40,
+    "volume_down": 39
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 48
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "bread-compact-nt26"
+  ]
+ },
+ "bread-compact-wifi": {
+  "label": "bread-compact-wifi",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ssd1306",
+    "width": 128,
+    "height": 64,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": 41,
+     "scl": 42
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 4,
+    "mic_sck": 5,
+    "mic_din": 6,
+    "spk_dout": 7,
+    "spk_bclk": 15,
+    "spk_lrck": 16,
+    "mclk": -1,
+    "bclk": 5,
+    "ws": 4,
+    "dout": 7,
+    "din": 6,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 40,
+    "volume_down": 39
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 48
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "bread-compact-wifi",
+   "bread-compact-wifi-128x64"
+  ]
+ },
+ "df-k10": {
+  "label": "df-k10",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ili9341",
+    "width": 240,
+    "height": 320,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 21,
+     "sclk": 12,
+     "cs": 14,
+     "dc": 13,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 3,
+    "bclk": 0,
+    "ws": 38,
+    "dout": 45,
+    "din": 39,
+    "pa": -1,
+    "i2c_sda": 47,
+    "i2c_scl": 48,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 46
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "df-k10"
+  ]
+ },
+ "df-s3-ai-cam": {
+  "label": "df-s3-ai-cam",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": 38,
+    "mic_din": 39,
+    "spk_dout": 42,
+    "spk_bclk": 45,
+    "spk_lrck": 46,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 3
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "df-s3-ai-cam"
+  ]
+ },
+ "doit-s3-aibox": {
+  "label": "doit-s3-aibox",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 41,
+    "mic_sck": 40,
+    "mic_din": 42,
+    "spk_dout": 18,
+    "spk_bclk": 17,
+    "spk_lrck": 16,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 10,
+    "volume_up": 15,
+    "volume_down": 9
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 45
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "doit-s3-aibox"
+  ]
+ },
+ "du-chatx": {
+  "label": "du-chatx",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 128,
+    "height": 160,
+    "offset_x": 2,
+    "offset_y": 1,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": false,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 18,
+     "sclk": 17,
+     "cs": 16,
+     "dc": 8,
+     "rst": 20,
+     "bl": 9,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 39,
+    "mic_sck": 38,
+    "mic_din": 7,
+    "spk_dout": 40,
+    "spk_bclk": 42,
+    "spk_lrck": 2,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 48
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "du-chatx"
+  ]
+ },
+ "echoear": {
+  "label": "echoear",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 360,
+    "height": 360,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": 44,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "box",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 42,
+    "bclk": 40,
+    "ws": 39,
+    "dout": 41,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": 2,
+    "i2c_scl": 1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "echoear"
+  ]
+ },
+ "electron-bot": {
+  "label": "electron-bot",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "gc9a01",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 10,
+     "sclk": 11,
+     "cs": 12,
+     "dc": 13,
+     "rst": 9,
+     "bl": 46,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": 42,
+    "mic_din": 41,
+    "spk_dout": 17,
+    "spk_bclk": 18,
+    "spk_lrck": 8,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "electron-bot"
+  ]
+ },
+ "esp-box": {
+  "label": "esp-box",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ili9341",
+    "width": 320,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 6,
+     "sclk": 7,
+     "cs": 5,
+     "dc": 4,
+     "rst": 48,
+     "bl": 45,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "box",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 2,
+    "bclk": 17,
+    "ws": 47,
+    "dout": 15,
+    "din": 16,
+    "pa": 46,
+    "i2c_sda": 8,
+    "i2c_scl": 18,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "esp-box"
+  ]
+ },
+ "esp-box-3": {
+  "label": "esp-box-3",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ili9341",
+    "width": 320,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 6,
+     "sclk": 7,
+     "cs": 5,
+     "dc": 4,
+     "rst": 48,
+     "bl": 47,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "box",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 2,
+    "bclk": 17,
+    "ws": 45,
+    "dout": 15,
+    "din": 16,
+    "pa": 46,
+    "i2c_sda": 8,
+    "i2c_scl": 18,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "esp-box-3"
+  ]
+ },
+ "esp-box-lite": {
+  "label": "esp-box-lite",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ili9341",
+    "width": 320,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": 6,
+     "sclk": 7,
+     "cs": 5,
+     "dc": 4,
+     "rst": 48,
+     "bl": 45,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "box",
+    "in_rate": 16000,
+    "out_rate": 16000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 2,
+    "bclk": 17,
+    "ws": 47,
+    "dout": 15,
+    "din": 16,
+    "pa": 46,
+    "i2c_sda": 8,
+    "i2c_scl": 18,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "esp-box-lite"
+  ]
+ },
+ "esp-hi": {
+  "label": "esp-hi",
+  "target": "esp32c3",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ili9341",
+    "width": 240,
+    "height": 80,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": true,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 4,
+     "sclk": 5,
+     "cs": -1,
+     "dc": 10,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 9,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "esp-hi"
+  ]
+ },
+ "esp-p4-function-ev-board": {
+  "label": "esp-p4-function-ev-board",
+  "target": "esp32p4",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": -1,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "esp-p4-function-ev-board"
+  ]
+ },
+ "esp-s3-lcd-ev-board": {
+  "label": "esp-s3-lcd-ev-board",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 480,
+    "height": 480,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": 19,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "box",
+    "in_rate": 16000,
+    "out_rate": 16000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 5,
+    "bclk": 16,
+    "ws": 7,
+    "dout": 6,
+    "din": 15,
+    "pa": -1,
+    "i2c_sda": 47,
+    "i2c_scl": 48,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 4
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "esp-s3-lcd-ev-board-1p4",
+   "esp-s3-lcd-ev-board-1p5"
+  ]
+ },
+ "esp-s3-lcd-ev-board-2": {
+  "label": "esp-s3-lcd-ev-board-2",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 800,
+    "height": 480,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": 19,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "box",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 5,
+    "bclk": 16,
+    "ws": 7,
+    "dout": 6,
+    "din": 15,
+    "pa": -1,
+    "i2c_sda": 47,
+    "i2c_scl": 48,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 4
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "esp-s3-lcd-ev-board-2"
+  ]
+ },
+ "esp-sensairshuttle": {
+  "label": "esp-sensairshuttle",
+  "target": "esp32c5",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ili9341",
+    "width": 240,
+    "height": 240,
+    "offset_x": 36,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": true,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 23,
+     "sclk": 24,
+     "cs": 25,
+     "dc": 26,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 28,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "esp-sensairshuttle"
+  ]
+ },
+ "esp-sparkbot": {
+  "label": "esp-sparkbot",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 47,
+     "sclk": 21,
+     "cs": 44,
+     "dc": 43,
+     "rst": -1,
+     "bl": 46,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 16000,
+    "out_rate": 16000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 45,
+    "bclk": 39,
+    "ws": 41,
+    "dout": 42,
+    "din": 40,
+    "pa": 46,
+    "i2c_sda": 4,
+    "i2c_scl": 5,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "esp-sparkbot"
+  ]
+ },
+ "esp-spot": {
+  "label": "esp-spot",
+  "target": "esp32c5",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 16000,
+    "out_rate": 16000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": -1,
+    "bclk": 7,
+    "ws": 8,
+    "dout": 9,
+    "din": 6,
+    "pa": 23,
+    "i2c_sda": 25,
+    "i2c_scl": 26,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 28,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "esp-spot-c5"
+  ]
+ },
+ "esp32-cgc": {
+  "label": "esp32-cgc",
+  "target": "esp32",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 320,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "bgr",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 23,
+     "sclk": 18,
+     "cs": 5,
+     "dc": 2,
+     "rst": -1,
+     "bl": 4,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 25,
+    "mic_sck": 26,
+    "mic_din": 32,
+    "spk_dout": 33,
+    "spk_bclk": 14,
+    "spk_lrck": 27,
+    "mclk": -1,
+    "bclk": 5,
+    "ws": 4,
+    "dout": 7,
+    "din": 6,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "esp32-cgc"
+  ]
+ },
+ "esp32-cgc-144": {
+  "label": "esp32-cgc-144",
+  "target": "esp32",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "bgr",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": 23,
+     "sclk": 18,
+     "cs": 5,
+     "dc": 2,
+     "rst": -1,
+     "bl": 4,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 25,
+    "mic_sck": 26,
+    "mic_din": 32,
+    "spk_dout": 33,
+    "spk_bclk": 14,
+    "spk_lrck": 27,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "esp32-cgc-144"
+  ]
+ },
+ "esp32s3-korvo2-v3": {
+  "label": "esp32s3-korvo2-v3",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": true,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 320,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 0,
+     "sclk": 1,
+     "cs": -1,
+     "dc": 2,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "box",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 16,
+    "bclk": 9,
+    "ws": 45,
+    "dout": 8,
+    "din": 10,
+    "pa": 48,
+    "i2c_sda": 17,
+    "i2c_scl": 18,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 5,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "esp32s3-korvo2-v3"
+  ]
+ },
+ "esp32s3-korvo2-v3-rndis": {
+  "label": "esp32s3-korvo2-v3-rndis",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": true,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 320,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 0,
+     "sclk": 1,
+     "cs": -1,
+     "dc": 2,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "box",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 16,
+    "bclk": 9,
+    "ws": 45,
+    "dout": 8,
+    "din": 10,
+    "pa": 48,
+    "i2c_sda": 17,
+    "i2c_scl": 18,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 5,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "esp32s3-korvo2-v3-rndis"
+  ]
+ },
+ "genjutech-s3-1.54tft": {
+  "label": "genjutech-s3-1.54tft",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 3,
+     "sclk": 4,
+     "cs": 6,
+     "dc": 5,
+     "rst": 7,
+     "bl": 2,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 16000,
+    "out_rate": 16000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 14,
+    "bclk": 13,
+    "ws": 11,
+    "dout": 10,
+    "din": 12,
+    "pa": 21,
+    "i2c_sda": 9,
+    "i2c_scl": 8,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 42,
+    "volume_down": 41
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "genjutech-s3-1.54tft"
+  ]
+ },
+ "hu-087": {
+  "label": "hu-087",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ssd1306",
+    "width": 128,
+    "height": 64,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": 41,
+     "scl": 42
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 4,
+    "mic_sck": 5,
+    "mic_din": 6,
+    "spk_dout": 7,
+    "spk_bclk": 15,
+    "spk_lrck": 16,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": -1,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "hu-087"
+  ]
+ },
+ "jiuchuan-s3": {
+  "label": "jiuchuan-s3",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 240,
+    "height": 296,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 40,
+     "sclk": 41,
+     "cs": 9,
+     "dc": 39,
+     "rst": -1,
+     "bl": 46,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 38,
+    "bclk": 14,
+    "ws": 13,
+    "dout": 12,
+    "din": 11,
+    "pa": 42,
+    "i2c_sda": 1,
+    "i2c_scl": 2,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 10
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "jiuchuan-s3"
+  ]
+ },
+ "kevin-box-2": {
+  "label": "kevin-box-2",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ssd1306",
+    "width": 128,
+    "height": 64,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": 7,
+     "scl": 8
+    }
+   },
+   "audio": {
+    "codec": "box",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 40,
+    "bclk": 38,
+    "ws": 47,
+    "dout": 48,
+    "din": 39,
+    "pa": 9,
+    "i2c_sda": 42,
+    "i2c_scl": 41,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 1,
+    "volume_down": 2
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 3
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "kevin-box-2"
+  ]
+ },
+ "kevin-c3": {
+  "label": "kevin-c3",
+  "target": "esp32c3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 10,
+    "bclk": 8,
+    "ws": 12,
+    "dout": 11,
+    "din": 7,
+    "pa": 13,
+    "i2c_sda": 0,
+    "i2c_scl": 1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 6,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 5
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "kevin-c3"
+  ]
+ },
+ "kevin-sp-v4-dev": {
+  "label": "kevin-sp-v4-dev",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": true,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 280,
+    "offset_x": 0,
+    "offset_y": 20,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 47,
+     "sclk": 21,
+     "cs": 14,
+     "dc": 45,
+     "rst": -1,
+     "bl": 48,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 16000,
+    "out_rate": 16000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 42,
+    "bclk": 46,
+    "ws": 1,
+    "dout": 3,
+    "din": 2,
+    "pa": 41,
+    "i2c_sda": 4,
+    "i2c_scl": 5,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 38
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "kevin-sp-v4-dev"
+  ]
+ },
+ "kevin-yuying-313lcd": {
+  "label": "kevin-yuying-313lcd",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 376,
+    "height": 960,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": 4,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 16000,
+    "out_rate": 16000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 42,
+    "bclk": 41,
+    "ws": 39,
+    "dout": 38,
+    "din": 40,
+    "pa": 45,
+    "i2c_sda": 1,
+    "i2c_scl": 2,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "kevin-yuying-313lcd"
+  ]
+ },
+ "labplus-ledong-v2": {
+  "label": "labplus-ledong-v2",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 320,
+    "height": 172,
+    "offset_x": 0,
+    "offset_y": 34,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 37,
+     "sclk": 36,
+     "cs": -1,
+     "dc": 35,
+     "rst": -1,
+     "bl": 34,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 39,
+    "bclk": 41,
+    "ws": 42,
+    "dout": 38,
+    "din": 40,
+    "pa": -1,
+    "i2c_sda": 44,
+    "i2c_scl": 43,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "labplus-ledong-v2"
+  ]
+ },
+ "labplus-mpython-v3": {
+  "label": "labplus-mpython-v3",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 320,
+    "height": 172,
+    "offset_x": 0,
+    "offset_y": 34,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 37,
+     "sclk": 36,
+     "cs": 34,
+     "dc": 35,
+     "rst": -1,
+     "bl": 33,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 39,
+    "bclk": 41,
+    "ws": 42,
+    "dout": 38,
+    "din": 40,
+    "pa": -1,
+    "i2c_sda": 44,
+    "i2c_scl": 43,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "labplus-mpython-v3"
+  ]
+ },
+ "lichuang-c3-dev": {
+  "label": "lichuang-c3-dev",
+  "target": "esp32c3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 320,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": 5,
+     "sclk": 3,
+     "cs": 4,
+     "dc": 6,
+     "rst": -1,
+     "bl": 2,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 10,
+    "bclk": 8,
+    "ws": 12,
+    "dout": 11,
+    "din": 7,
+    "pa": -1,
+    "i2c_sda": 0,
+    "i2c_scl": 1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 9,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "lichuang-c3-dev"
+  ]
+ },
+ "lichuang-dev": {
+  "label": "lichuang-dev",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": true,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 320,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": 40,
+     "sclk": 41,
+     "cs": -1,
+     "dc": 39,
+     "rst": -1,
+     "bl": 42,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "box",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 38,
+    "bclk": 14,
+    "ws": 13,
+    "dout": 45,
+    "din": 12,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": 2,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 48
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "lichuang-dev"
+  ]
+ },
+ "lilygo-t-cameraplus-s3": {
+  "label": "lilygo-t-cameraplus-s3",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "lilygo-t-cameraplus-s3",
+   "lilygo-t-cameraplus-s3_v1_2"
+  ]
+ },
+ "lilygo-t-circle-s3": {
+  "label": "lilygo-t-circle-s3",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "lilygo-t-circle-s3"
+  ]
+ },
+ "lilygo-t-display-s3-pro-mvsrlora": {
+  "label": "lilygo-t-display-s3-pro-mvsrlora",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7796",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "bgr",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "lilygo-t-display-s3-pro-mvsrlora"
+  ]
+ },
+ "m5stack-cardputer-adv": {
+  "label": "m5stack-cardputer-adv",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 135,
+    "offset_x": 40,
+    "offset_y": 52,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 35,
+     "sclk": 36,
+     "cs": 37,
+     "dc": 34,
+     "rst": 33,
+     "bl": 38,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": -1,
+    "bclk": 41,
+    "ws": 43,
+    "dout": 42,
+    "din": 46,
+    "pa": -1,
+    "i2c_sda": 8,
+    "i2c_scl": 9,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "m5stack-cardputer-adv"
+  ]
+ },
+ "m5stack-core-s3": {
+  "label": "m5stack-core-s3",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ili9341",
+    "width": 320,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "bgr",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": 37,
+     "sclk": 36,
+     "cs": 3,
+     "dc": 35,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 0,
+    "bclk": 34,
+    "ws": 33,
+    "dout": 13,
+    "din": 14,
+    "pa": -1,
+    "i2c_sda": 12,
+    "i2c_scl": 11,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "m5stack-core-s3"
+  ]
+ },
+ "m5stack-tab5": {
+  "label": "m5stack-tab5",
+  "target": "esp32p4",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 720,
+    "height": 1280,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": 22,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 30,
+    "bclk": 27,
+    "ws": 29,
+    "dout": 26,
+    "din": 28,
+    "pa": -1,
+    "i2c_sda": 31,
+    "i2c_scl": 32,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "m5stack-tab5"
+  ]
+ },
+ "magiclick-2p4": {
+  "label": "magiclick-2p4",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 128,
+    "height": 128,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "bgr",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 15,
+     "sclk": 16,
+     "cs": 17,
+     "dc": 18,
+     "rst": 14,
+     "bl": 13,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 8,
+    "bclk": 9,
+    "ws": 11,
+    "dout": 12,
+    "din": 10,
+    "pa": 4,
+    "i2c_sda": 5,
+    "i2c_scl": 6,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": -1,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 38
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "magiclick-2p4"
+  ]
+ },
+ "magiclick-2p5": {
+  "label": "magiclick-2p5",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 128,
+    "height": 128,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "bgr",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": 16,
+     "sclk": 15,
+     "cs": 14,
+     "dc": 18,
+     "rst": 17,
+     "bl": 13,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 8,
+    "bclk": 9,
+    "ws": 11,
+    "dout": 12,
+    "din": 10,
+    "pa": 4,
+    "i2c_sda": 5,
+    "i2c_scl": 6,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": -1,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 38
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "magiclick-2p5"
+  ]
+ },
+ "magiclick-c3": {
+  "label": "magiclick-c3",
+  "target": "esp32c3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 128,
+    "height": 128,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "bgr",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": 12,
+     "sclk": 13,
+     "cs": 20,
+     "dc": 21,
+     "rst": -1,
+     "bl": 9,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 5,
+    "bclk": 6,
+    "ws": 8,
+    "dout": 10,
+    "din": 7,
+    "pa": 11,
+    "i2c_sda": 3,
+    "i2c_scl": 4,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 2,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "magiclick-c3"
+  ]
+ },
+ "magiclick-c3-v2": {
+  "label": "magiclick-c3-v2",
+  "target": "esp32c3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "gc9a01",
+    "width": 128,
+    "height": 128,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": 13,
+     "sclk": 12,
+     "cs": 20,
+     "dc": 21,
+     "rst": -1,
+     "bl": 9,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 5,
+    "bclk": 6,
+    "ws": 8,
+    "dout": 10,
+    "din": 7,
+    "pa": 11,
+    "i2c_sda": 3,
+    "i2c_scl": 4,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 2,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "magiclick-c3-v2"
+  ]
+ },
+ "minsi-k08-dual": {
+  "label": "minsi-k08-dual",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 240,
+    "offset_x": 80,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": true,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 17,
+     "sclk": 8,
+     "cs": -1,
+     "dc": 15,
+     "rst": 16,
+     "bl": 7,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 9,
+    "mic_sck": 10,
+    "mic_din": 18,
+    "spk_dout": 4,
+    "spk_bclk": 5,
+    "spk_lrck": 6,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 47,
+    "volume_down": 46
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 40
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "minsi-k08-dual"
+  ]
+ },
+ "mixgo-nova": {
+  "label": "mixgo-nova",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 128,
+    "height": 160,
+    "offset_x": 2,
+    "offset_y": 1,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": false,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 40,
+     "sclk": 41,
+     "cs": 45,
+     "dc": 18,
+     "rst": -1,
+     "bl": 14,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 35,
+    "bclk": 34,
+    "ws": 47,
+    "dout": 48,
+    "din": 33,
+    "pa": -1,
+    "i2c_sda": 37,
+    "i2c_scl": 36,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 38
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "mixgo-nova"
+  ]
+ },
+ "movecall-cuican-esp32s3": {
+  "label": "movecall-cuican-esp32s3",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "gc9a01",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 10,
+     "sclk": 12,
+     "cs": 13,
+     "dc": 14,
+     "rst": 11,
+     "bl": 16,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 45,
+    "bclk": 39,
+    "ws": 41,
+    "dout": 42,
+    "din": 40,
+    "pa": 17,
+    "i2c_sda": 6,
+    "i2c_scl": 7,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 21
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "movecall-cuican-esp32s3"
+  ]
+ },
+ "movecall-moji-esp32s3": {
+  "label": "movecall-moji-esp32s3",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "gc9a01",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 17,
+     "sclk": 16,
+     "cs": 15,
+     "dc": 7,
+     "rst": 18,
+     "bl": 3,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 6,
+    "bclk": 14,
+    "ws": 12,
+    "dout": 11,
+    "din": 13,
+    "pa": 9,
+    "i2c_sda": 5,
+    "i2c_scl": 4,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 21
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "movecall-moji-esp32s3"
+  ]
+ },
+ "movecall-moji2-esp32c5": {
+  "label": "movecall-moji2-esp32c5",
+  "target": "esp32c5",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 360,
+    "height": 360,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": 1,
+     "bl": 2,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 25,
+    "bclk": 11,
+    "ws": 24,
+    "dout": 23,
+    "din": 12,
+    "pa": 5,
+    "i2c_sda": 26,
+    "i2c_scl": 27,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 28,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 10
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "movecall-moji2-esp32c5"
+  ]
+ },
+ "otto-robot": {
+  "label": "otto-robot",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 3,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "otto-robot"
+  ]
+ },
+ "sensecap-watcher": {
+  "label": "sensecap-watcher",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 412,
+    "height": 412,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 5,
+     "sclk": 4,
+     "cs": 45,
+     "dc": -1,
+     "rst": -1,
+     "bl": 8,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 10,
+    "bclk": 11,
+    "ws": 12,
+    "dout": 16,
+    "din": 15,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 40
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "sensecap-watcher"
+  ]
+ },
+ "sp-esp32-s3-1.28-box": {
+  "label": "sp-esp32-s3-1.28-box",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "gc9a01",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": 2,
+     "sclk": 4,
+     "cs": 5,
+     "dc": 47,
+     "rst": 38,
+     "bl": 42,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 16,
+    "bclk": 9,
+    "ws": 45,
+    "dout": 8,
+    "din": 10,
+    "pa": 46,
+    "i2c_sda": 15,
+    "i2c_scl": 14,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 48
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "sp-esp32-s3-1.28-box"
+  ]
+ },
+ "sp-esp32-s3-1.54-muma": {
+  "label": "sp-esp32-s3-1.54-muma",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": 2,
+     "sclk": 4,
+     "cs": 5,
+     "dc": 47,
+     "rst": 38,
+     "bl": 42,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 16,
+    "bclk": 9,
+    "ws": 45,
+    "dout": 8,
+    "din": 10,
+    "pa": 46,
+    "i2c_sda": 15,
+    "i2c_scl": 14,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 48
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "sp-esp32-s3-1.54-muma"
+  ]
+ },
+ "surfer-c3-1.14tft": {
+  "label": "surfer-c3-1.14tft",
+  "target": "esp32c3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 135,
+    "offset_x": 40,
+    "offset_y": 53,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 5,
+     "sclk": 3,
+     "cs": 4,
+     "dc": 6,
+     "rst": -1,
+     "bl": 13,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 10,
+    "bclk": 8,
+    "ws": 12,
+    "dout": 11,
+    "din": 7,
+    "pa": -1,
+    "i2c_sda": 0,
+    "i2c_scl": 1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 9,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "surfer-c3-1.14tft"
+  ]
+ },
+ "taiji-pi-s3": {
+  "label": "taiji-pi-s3",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 360,
+    "height": 360,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": 47,
+     "bl": 15,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 21,
+    "bclk": 18,
+    "ws": 16,
+    "dout": 17,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": -1,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "taiji-pi-s3",
+   "taiji-pi-s3-pdm"
+  ]
+ },
+ "tudouzi": {
+  "label": "tudouzi",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ssd1306",
+    "width": 128,
+    "height": 64,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": 7,
+     "scl": 8
+    }
+   },
+   "audio": {
+    "codec": "box",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 40,
+    "bclk": 38,
+    "ws": 47,
+    "dout": 48,
+    "din": 39,
+    "pa": 9,
+    "i2c_sda": 42,
+    "i2c_scl": 41,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 1,
+    "volume_down": 2
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 3
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "tudouzi"
+  ]
+ },
+ "wireless-tag-wtp4c5mp07s": {
+  "label": "wireless-tag-wtp4c5mp07s",
+  "target": "esp32p4",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 1024,
+    "height": 600,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 44,
+     "sclk": 43,
+     "cs": -1,
+     "dc": -1,
+     "rst": 23,
+     "bl": 20,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 13,
+    "bclk": 12,
+    "ws": 10,
+    "dout": 9,
+    "din": 11,
+    "pa": 53,
+    "i2c_sda": 7,
+    "i2c_scl": 8,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 35,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "wireless-tag-wtp4c5mp07s"
+  ]
+ },
+ "xingzhi-abs-2.0": {
+  "label": "xingzhi-abs-2.0",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 10,
+     "sclk": 9,
+     "cs": 14,
+     "dc": 8,
+     "rst": 18,
+     "bl": 13,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 5,
+    "bclk": 6,
+    "ws": 4,
+    "dout": 15,
+    "din": 17,
+    "pa": -1,
+    "i2c_sda": 41,
+    "i2c_scl": 42,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 45,
+    "volume_down": 2
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "xingzhi-abs-2.0"
+  ]
+ },
+ "xingzhi-cube-0.85tft-ml307": {
+  "label": "xingzhi-cube-0.85tft-ml307",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 128,
+    "height": 128,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "bgr",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 10,
+     "sclk": 9,
+     "cs": 14,
+     "dc": 8,
+     "rst": 18,
+     "bl": 13,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 4,
+    "mic_sck": 5,
+    "mic_din": 6,
+    "spk_dout": 7,
+    "spk_bclk": 15,
+    "spk_lrck": 16,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "xingzhi-cube-0.85tft-ml307"
+  ]
+ },
+ "xingzhi-cube-0.85tft-wifi": {
+  "label": "xingzhi-cube-0.85tft-wifi",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "none",
+    "width": 128,
+    "height": 128,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "bgr",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 10,
+     "sclk": 9,
+     "cs": 14,
+     "dc": 8,
+     "rst": 18,
+     "bl": 13,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 4,
+    "mic_sck": 5,
+    "mic_din": 6,
+    "spk_dout": 7,
+    "spk_bclk": 15,
+    "spk_lrck": 16,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "xingzhi-cube-0.85tft-wifi"
+  ]
+ },
+ "xingzhi-cube-0.96oled-ml307": {
+  "label": "xingzhi-cube-0.96oled-ml307",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ssd1306",
+    "width": 128,
+    "height": 64,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": 41,
+     "scl": 42
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 4,
+    "mic_sck": 5,
+    "mic_din": 6,
+    "spk_dout": 7,
+    "spk_bclk": 15,
+    "spk_lrck": 16,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 40,
+    "volume_down": 39
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 48
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "xingzhi-cube-0.96oled-ml307"
+  ]
+ },
+ "xingzhi-cube-0.96oled-wifi": {
+  "label": "xingzhi-cube-0.96oled-wifi",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ssd1306",
+    "width": 128,
+    "height": 64,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": 41,
+     "scl": 42
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 4,
+    "mic_sck": 5,
+    "mic_din": 6,
+    "spk_dout": 7,
+    "spk_bclk": 15,
+    "spk_lrck": 16,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 40,
+    "volume_down": 39
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 48
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "xingzhi-cube-0.96oled-wifi"
+  ]
+ },
+ "xingzhi-cube-1.54tft-ml307": {
+  "label": "xingzhi-cube-1.54tft-ml307",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 10,
+     "sclk": 9,
+     "cs": 14,
+     "dc": 8,
+     "rst": 18,
+     "bl": 13,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 4,
+    "mic_sck": 5,
+    "mic_din": 6,
+    "spk_dout": 7,
+    "spk_bclk": 15,
+    "spk_lrck": 16,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 40,
+    "volume_down": 39
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "xingzhi-cube-1.54tft-ml307",
+   "xingzhi-cube-1.54tft-ml307-wechatui"
+  ]
+ },
+ "xingzhi-cube-1.54tft-wifi": {
+  "label": "xingzhi-cube-1.54tft-wifi",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 10,
+     "sclk": 9,
+     "cs": 14,
+     "dc": 8,
+     "rst": 18,
+     "bl": 13,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 4,
+    "mic_sck": 5,
+    "mic_din": 6,
+    "spk_dout": 7,
+    "spk_bclk": 15,
+    "spk_lrck": 16,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 40,
+    "volume_down": 39
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "xingzhi-cube-1.54tft-wifi"
+  ]
+ },
+ "xingzhi-metal-1.54-wifi": {
+  "label": "xingzhi-metal-1.54-wifi",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 10,
+     "sclk": 9,
+     "cs": 14,
+     "dc": 8,
+     "rst": 18,
+     "bl": 13,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 5,
+    "bclk": 6,
+    "ws": 4,
+    "dout": 15,
+    "din": 17,
+    "pa": -1,
+    "i2c_sda": 41,
+    "i2c_scl": 42,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "xingzhi-metal-1.54-wifi"
+  ]
+ },
+ "xmini-c3": {
+  "label": "xmini-c3",
+  "target": "esp32c3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ssd1306",
+    "width": 128,
+    "height": 64,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": 3,
+     "scl": 4
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 10,
+    "bclk": 8,
+    "ws": 6,
+    "dout": 5,
+    "din": 7,
+    "pa": 11,
+    "i2c_sda": 3,
+    "i2c_scl": 4,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 9,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 2
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "xmini-c3"
+  ]
+ },
+ "xmini-c3-4g": {
+  "label": "xmini-c3-4g",
+  "target": "esp32c3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ssd1306",
+    "width": 128,
+    "height": 64,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": 21,
+     "scl": 20
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 10,
+    "bclk": 5,
+    "ws": 7,
+    "dout": 8,
+    "din": 6,
+    "pa": 13,
+    "i2c_sda": 21,
+    "i2c_scl": 20,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 9,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 3
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "xmini-c3-4g"
+  ]
+ },
+ "xmini-c3-v3": {
+  "label": "xmini-c3-v3",
+  "target": "esp32c3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "ssd1306",
+    "width": 128,
+    "height": 64,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": true,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": -1,
+     "sclk": -1,
+     "cs": -1,
+     "dc": -1,
+     "rst": -1,
+     "bl": -1,
+     "sda": 0,
+     "scl": 1
+    }
+   },
+   "audio": {
+    "codec": "es8311",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 8,
+    "bclk": 7,
+    "ws": 5,
+    "dout": 4,
+    "din": 6,
+    "pa": 10,
+    "i2c_sda": 0,
+    "i2c_scl": 1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 9,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 2
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "xmini-c3-v3"
+  ]
+ },
+ "yunliao-s3": {
+  "label": "yunliao-s3",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": false,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 320,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": true,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 40,
+     "sclk": 42,
+     "cs": -1,
+     "dc": 41,
+     "rst": 45,
+     "bl": 46,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "none",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 14,
+    "bclk": 13,
+    "ws": 11,
+    "dout": 12,
+    "din": 10,
+    "pa": 17,
+    "i2c_sda": 18,
+    "i2c_scl": 21,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": -1,
+    "volume_up": -1,
+    "volume_down": -1
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "yunliao-s3"
+  ]
+ },
+ "zhengchen-1.54tft-ml307": {
+  "label": "zhengchen-1.54tft-ml307",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": false,
+    "mirror_y": false,
+    "swap_xy": false,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": false,
+    "pins": {
+     "mosi": 41,
+     "sclk": 42,
+     "cs": 21,
+     "dc": 40,
+     "rst": 45,
+     "bl": 20,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 4,
+    "mic_sck": 5,
+    "mic_din": 6,
+    "spk_dout": 7,
+    "spk_bclk": 15,
+    "spk_lrck": 16,
+    "mclk": -1,
+    "bclk": -1,
+    "ws": -1,
+    "dout": -1,
+    "din": -1,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": -1,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 10,
+    "volume_down": 39
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": -1
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "zhengchen-1.54tft-ml307"
+  ]
+ },
+ "zhengchen-1.54tft-wifi": {
+  "label": "zhengchen-1.54tft-wifi",
+  "target": "esp32s3",
+  "source": "claudevoice",
+  "supported": true,
+  "camera_on_board": false,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 240,
+    "height": 240,
+    "invert": true,
+    "spi_mode": 3,
+    "pclk_mhz": 80,
+    "pins": {
+     "mosi": 41,
+     "sclk": 42,
+     "cs": 21,
+     "dc": 40,
+     "rst": 45,
+     "bl": 20
+    }
+   },
+   "audio": {
+    "codec": "i2s_simplex",
+    "in_rate": 16000,
+    "out_rate": 24000,
+    "mic_ws": 4,
+    "mic_sck": 5,
+    "mic_din": 6,
+    "spk_dout": 7,
+    "spk_bclk": 15,
+    "spk_lrck": 16
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 10,
+    "volume_down": 39
+   },
+   "power": {
+    "latch": 2,
+    "charge_detect": 9
+   },
+   "inputs": [
+    {
+     "pin": 11,
+     "type": "touch",
+     "name": "Left antenna",
+     "tap": "affection",
+     "double": "affection",
+     "hold": "affection"
+    },
+    {
+     "pin": 12,
+     "type": "touch",
+     "name": "Right antenna",
+     "tap": "affection",
+     "double": "affection",
+     "hold": "affection"
+    }
+   ]
+  },
+  "names": [
+   "zhengchen-1.54tft-wifi"
+  ]
+ },
+ "zhengchen-cam": {
+  "label": "zhengchen-cam",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": true,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 320,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": 40,
+     "sclk": 41,
+     "cs": -1,
+     "dc": 39,
+     "rst": -1,
+     "bl": 42,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "box",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 38,
+    "bclk": 14,
+    "ws": 13,
+    "dout": 45,
+    "din": 12,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": 2,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 3,
+    "volume_down": 46
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 48
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "zhengchen-cam"
+  ]
+ },
+ "zhengchen-cam-ml307": {
+  "label": "zhengchen-cam-ml307",
+  "target": "esp32s3",
+  "source": "xiaozhi",
+  "supported": true,
+  "camera_on_board": true,
+  "profile": {
+   "display": {
+    "driver": "st7789",
+    "width": 320,
+    "height": 240,
+    "offset_x": 0,
+    "offset_y": 0,
+    "mirror_x": true,
+    "mirror_y": false,
+    "swap_xy": true,
+    "invert": true,
+    "rgb_order": "rgb",
+    "spi_mode": 0,
+    "pclk_mhz": 40,
+    "bl_invert": true,
+    "pins": {
+     "mosi": 40,
+     "sclk": 41,
+     "cs": -1,
+     "dc": 39,
+     "rst": -1,
+     "bl": 42,
+     "sda": -1,
+     "scl": -1
+    }
+   },
+   "audio": {
+    "codec": "box",
+    "in_rate": 24000,
+    "out_rate": 24000,
+    "mic_ws": -1,
+    "mic_sck": -1,
+    "mic_din": -1,
+    "spk_dout": -1,
+    "spk_bclk": -1,
+    "spk_lrck": -1,
+    "mclk": 38,
+    "bclk": 14,
+    "ws": 13,
+    "dout": 45,
+    "din": 12,
+    "pa": -1,
+    "i2c_sda": -1,
+    "i2c_scl": 2,
+    "es8311_addr": 48,
+    "es7210_addr": 128,
+    "pa_inverted": false,
+    "use_mclk": true
+   },
+   "buttons": {
+    "boot": 0,
+    "volume_up": 3,
+    "volume_down": 46
+   },
+   "power": {
+    "latch": -1,
+    "charge_detect": -1,
+    "led": 48
+   },
+   "inputs": [],
+   "outputs": []
+  },
+  "names": [
+   "zhengchen-cam-ml307"
+  ]
+ }
+}

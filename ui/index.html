@@ -88,6 +88,14 @@ table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:7px 8px;
 .pc q{display:block;font-style:italic;font-size:12.5px;margin-top:8px;color:#d9c9a8}
 .pc .badge{position:absolute;top:10px;right:10px;background:var(--acc);color:#1a1207;font:600 10px var(--mono);padding:2px 6px;border-radius:4px}
 .pc .act{display:flex;gap:6px;margin-top:10px} .pc .act button{padding:4px 9px;font-size:12px}
+.wiz{position:fixed;inset:0;background:#000a;display:flex;align-items:center;justify-content:center;z-index:50}
+.wiz-box{background:var(--panel);border:1px solid var(--acc);border-radius:14px;width:min(760px,94vw);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px #000c}
+.wiz-head{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)} .wiz-head b{flex:1;color:var(--acc);font:600 15px var(--mono);letter-spacing:.06em}
+.wiz-head button{padding:4px 10px}
+.wiz-steps{display:flex;gap:6px;padding:10px 18px;flex-wrap:wrap;font-size:12px;color:var(--dim)} .wiz-steps span{padding:3px 9px;border-radius:99px;border:1px solid var(--line)}
+.wiz-steps span.on{border-color:var(--acc);color:var(--acc)} .wiz-steps span.done{color:var(--ok)}
+.wiz-body{padding:8px 18px 14px;overflow:auto} .wiz-foot{display:flex;gap:10px;padding:12px 18px;border-top:1px solid var(--line)}
+.wiz-list{display:grid;gap:8px} .wiz-port{text-align:left;padding:10px 14px} .wiz-ol{line-height:1.7;padding-left:20px}
 @media (max-width:760px){body{grid-template-columns:1fr;grid-template-rows:56px auto 1fr} nav{display:flex;overflow-x:auto;border-right:none;border-bottom:1px solid var(--line);padding:6px} nav a{white-space:nowrap} main{padding:16px}}
 </style>
 </head>
@@ -98,6 +106,7 @@ table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:7px 8px;
     <div class="pill" id="p-server"><b></b>сервер</div>
     <div class="pill" id="p-device"><b></b>устройство</div>
     <div class="pill" id="p-brain"><b></b>мозг</div>
+    <button id="wiz-open" class="pri" style="padding:5px 12px;font-size:12.5px">Мастер настройки</button>
   </div>
 </header>
 <nav id="nav">
@@ -339,6 +348,11 @@ table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:7px 8px;
 <section id="s-hw">
   <h2>Железо</h2><p class="sub">Все технические детали устройства: дисплей, выводы, антенки и кнопки, выходы. Сохраняется в программе (hardware.json) и применяется на устройстве.</p>
   <div class="note">Если после смены дисплея или пинов экран не работает — включите устройство, удерживая кнопку <b>«громкость −»</b>: оно загрузится с заводскими настройками, а вы исправите профиль здесь.</div>
+  <div class="card"><h3>Устройство</h3>
+    <div class="row"><div style="flex:1;min-width:200px"><label class="f">Чьи настройки</label><select id="hw-dev"></select></div>
+      <div style="flex:2;min-width:240px"><label class="f">Загрузить готовое описание платы</label><div class="row"><select id="hw-board" style="flex:1"></select><button id="hw-board-load">Загрузить</button></div></div></div>
+    <div class="hint" id="hw-chip"></div>
+  </div>
   <div class="grid">
     <div class="card"><h3>Связь с компьютером</h3>
       <label class="switch"><input type="checkbox" id="disc-on"><i></i>Автопоиск устройства в сети</label>
@@ -368,7 +382,14 @@ table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:7px 8px;
     <div class="row" style="margin-top:10px"><button id="hw-out-add">+ Добавить выход</button></div>
     <div class="hint">Вибромотор подключайте через транзистор или драйвер, не напрямую к пину (пин даёт до ~20 мА).</div>
   </div>
-  <div class="card"><h3>Звук, кнопки, питание</h3><div class="row" id="hw-other"></div></div>
+  <div class="card"><h3>Звук</h3>
+    <div class="row"><div style="flex:2;min-width:260px"><label class="f">Как подключены микрофон и динамик</label><select id="hw-codec"></select></div>
+      <div style="width:130px"><label class="f">Частота микрофона</label><select id="hw-inr"><option>16000</option><option>24000</option></select></div>
+      <div style="width:130px"><label class="f">Частота динамика</label><select id="hw-outr"><option>16000</option><option>24000</option></select></div></div>
+    <div class="row" id="hw-apins" style="margin-top:4px"></div>
+    <div class="hint" id="hw-ahint"></div>
+  </div>
+  <div class="card"><h3>Кнопки и питание</h3><div class="row" id="hw-other"></div></div>
   <div class="row"><button class="pri" id="hw-save">Сохранить и применить</button><button id="hw-reset">Заводские настройки</button><button id="hw-export">Скачать профиль</button>
     <label class="btnfile">Загрузить профиль<input type="file" id="hw-import" accept=".json"></label></div>
   <div class="reply" id="hw-res" style="display:none"></div>
@@ -440,6 +461,65 @@ table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:7px 8px;
   <pre class="log" id="log"></pre>
 </section>
 </main>
+
+<!-- FIRST-SETUP WIZARD -->
+<div id="wiz" class="wiz" style="display:none">
+  <div class="wiz-box">
+    <div class="wiz-head"><b>Мастер настройки устройства</b><button id="wiz-x" title="Закрыть">✕</button></div>
+    <div class="wiz-steps" id="wiz-steps"></div>
+    <div class="wiz-body">
+      <!-- 1 -->
+      <div data-step="1">
+        <h3>1. Подключите плату</h3>
+        <p class="sub">Подключите устройство к компьютеру USB-кабелем с передачей данных. Если плата не находится — зажмите на ней <b>BOOT</b> и переподключите кабель.</p>
+        <div id="wiz-ports" class="wiz-list"></div>
+        <div class="row" style="margin-top:12px"><button id="wiz-scan">↻ Обновить</button></div>
+      </div>
+      <!-- 2 -->
+      <div data-step="2">
+        <h3>2. Плата</h3>
+        <dl class="kv" id="wiz-info"></dl>
+        <div class="note" id="wiz-now" style="margin-top:12px"></div>
+        <label class="f">Какая это плата</label><select id="wiz-preset"></select>
+        <div class="hint" id="wiz-preset-hint"></div>
+        <label class="f">Вариант прошивки (подобран под чип и память)</label><select id="wiz-variant"></select>
+      </div>
+      <!-- 3 -->
+      <div data-step="3">
+        <h3>3. Wi-Fi и прошивка</h3>
+        <div class="row"><div style="flex:1;min-width:200px"><label class="f">Сеть Wi-Fi</label><input type="text" id="wiz-ssid" placeholder="имя сети (можно оставить пустым)"></div>
+          <div style="flex:1;min-width:200px"><label class="f">Пароль</label><input type="text" id="wiz-pass" autocomplete="off"></div></div>
+        <div class="hint">Wi-Fi записывается прямо в устройство, тогда точка доступа не понадобится. Пусто — настроите Wi-Fi с телефона после прошивки.</div>
+        <div class="note bad" id="wiz-warn" style="margin-top:12px"></div>
+        <label class="chk"><input type="checkbox" id="wiz-backup" checked>Сохранить копию текущей прошивки (рекомендуется)</label><br>
+        <label class="chk"><input type="checkbox" id="wiz-erase" checked>Стереть память перед записью</label>
+        <div class="row" style="margin-top:14px"><button class="pri" id="wiz-go">Прошить</button></div>
+        <div class="bar" style="margin-top:14px"><i id="wiz-bar"></i></div>
+        <div class="hint" id="wiz-job"></div>
+        <pre class="log" id="wiz-log" style="height:140px;margin-top:8px"></pre>
+      </div>
+      <!-- 4 -->
+      <div data-step="4">
+        <h3>4. Подключение</h3>
+        <div id="wiz-wifi-help">
+          <ol class="wiz-ol">
+            <li>Устройство показывает точку доступа <b>Xiaozhi-XXXX</b> (если нет — зажмите BOOT на 2–3 секунды).</li>
+            <li>Подключитесь к ней с телефона или этого ПК и откройте <span class="mono">http://192.168.4.1</span>.</li>
+            <li>Выберите свою сеть Wi-Fi и введите пароль.</li>
+          </ol>
+        </div>
+        <div class="reply" id="wiz-wait">Жду, когда устройство появится в сети…</div>
+      </div>
+      <!-- 5 -->
+      <div data-step="5">
+        <h3>5. Готово</h3>
+        <p id="wiz-done"></p>
+        <div class="row"><button class="pri" data-goto="hw">Проверить пины и дисплей</button><button data-goto="skins">Выбрать скин</button><button data-goto="brain">Выбрать мозг</button></div>
+      </div>
+    </div>
+    <div class="wiz-foot"><button id="wiz-back">Назад</button><span style="flex:1"></span><button class="pri" id="wiz-next">Далее</button></div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script src="/ui/engine/cv_font.js"></script>
@@ -876,17 +956,37 @@ let wasOnline = false;
 // ---------------- hardware profile ----------------
 let HW = null, HWC = null;
 const DPIN = [["mosi", "MOSI / SDA данных"], ["sclk", "SCLK"], ["cs", "CS"], ["dc", "DC"], ["rst", "RST"], ["bl", "Подсветка"], ["sda", "I2C SDA"], ["scl", "I2C SCL"]];
-const OTHER = [["audio", "mic_ws", "Микрофон WS"], ["audio", "mic_sck", "Микрофон SCK"], ["audio", "mic_din", "Микрофон DIN"], ["audio", "spk_dout", "Динамик DOUT"],
-  ["audio", "spk_bclk", "Динамик BCLK"], ["audio", "spk_lrck", "Динамик LRCK"], ["buttons", "boot", "Кнопка BOOT"], ["buttons", "volume_up", "Громкость +"],
-  ["buttons", "volume_down", "Громкость −"], ["power", "latch", "Удержание питания"], ["power", "charge_detect", "Датчик зарядки"]];
+const OTHER = [["buttons", "boot", "Кнопка BOOT"], ["buttons", "volume_up", "Громкость +"], ["buttons", "volume_down", "Громкость −"],
+  ["power", "latch", "Удержание питания"], ["power", "charge_detect", "Датчик зарядки"], ["power", "led", "Светодиод"]];
+const APIN = {mic_ws: "Микрофон WS", mic_sck: "Микрофон SCK", mic_din: "Микрофон SD (DIN)", spk_dout: "Усилитель DIN",
+  spk_bclk: "Усилитель BCLK", spk_lrck: "Усилитель LRC", mclk: "MCLK", bclk: "BCLK", ws: "WS / LRCK", dout: "DOUT (к динамику)",
+  din: "DIN (от микрофона)", pa: "Усилитель вкл. (PA)", i2c_sda: "I2C SDA", i2c_scl: "I2C SCL"};
+let HW_DEVICE = "";
 const CAMP = ["d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "xclk", "pclk", "vsync", "href", "sda", "scl", "pwdn", "reset"];
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const pinBox = (id, label, v) => `<div style="width:108px"><label class="f">${label}</label><input type="number" min="-1" max="48" id="${id}" value="${v}"></div>`;
 
 async function loadHw() {
-  try { const r = await api("/api/hardware"); HW = r.hardware; HWC = r.catalog; renderHw(); }
-  catch (e) { toast(e.message, true); }
+  try {
+    const r = await api("/api/hardware" + (HW_DEVICE ? "?device=" + encodeURIComponent(HW_DEVICE) : ""));
+    HW = r.hardware; HWC = r.catalog; HW_DEVICE = r.device || "";
+    const devs = r.devices || [];
+    if (HW_DEVICE && !devs.find(d => d.device.toLowerCase() === HW_DEVICE.toLowerCase())) devs.unshift({device: HW_DEVICE, board: HW.board});
+    $("#hw-dev").innerHTML = devs.length ? devs.map(d => `<option value="${d.device}"${d.device.toLowerCase() === HW_DEVICE.toLowerCase() ? " selected" : ""}>${esc(d.device)}${d.board ? " · " + esc(d.board) : ""}</option>`).join("")
+      : `<option value="">устройство ещё не подключалось</option>`;
+    const pr = await api("/api/hardware/presets?target=" + (HW.target || "esp32s3"));
+    $("#hw-board").innerHTML = `<option value="">— выберите плату —</option>` + Object.entries(pr.presets).filter(([, p]) => p.supported)
+      .sort((a, b) => a[0].localeCompare(b[0])).map(([k]) => `<option value="${k}"${k === HW.board ? " selected" : ""}>${esc(k)}</option>`).join("");
+    renderHw();
+  } catch (e) { toast(e.message, true); }
 }
+$("#hw-dev").onchange = () => { HW_DEVICE = $("#hw-dev").value; loadHw(); };
+$("#hw-board-load").onclick = async () => {
+  const b = $("#hw-board").value; if (!b) return;
+  if (!confirm(`Заменить настройки этого устройства описанием платы ${b}? Сохранение — кнопкой «Сохранить и применить».`)) return;
+  const r = await api("/api/hardware/reset", {device: HW_DEVICE, preset: b, target: HW.target});
+  HW = r.hardware; renderHw(); toast("Описание платы загружено — проверьте и сохраните");
+};
 function actSel(cls, i, v) {
   return `<select class="${cls}" data-i="${i}" style="min-width:150px">` + Object.entries(HWC.actions).map(([k, n]) => `<option value="${k}"${k === v ? " selected" : ""}>${esc(n)}</option>`).join("") + "</select>";
 }
@@ -894,9 +994,21 @@ function gestureCell(inp, i, g) {
   const [a, b] = (inp[g] || "none").split(",");
   return `<td>${actSel("in-" + g, i, a)}<br>${actSel("in-" + g + "2", i, b || "none")}</td>`;
 }
+function renderAudio() {
+  const a = HW.audio;
+  $("#hw-codec").innerHTML = Object.entries(HWC.audio_codecs).map(([k, n]) => `<option value="${k}"${k === a.codec ? " selected" : ""}>${esc(n)}</option>`).join("");
+  $("#hw-inr").value = String(a.in_rate); $("#hw-outr").value = String(a.out_rate);
+  $("#hw-apins").innerHTML = (HWC.audio_pins[a.codec] || []).map(k => pinBox("ap-" + k, APIN[k] || k, a[k])).join("");
+  $("#hw-ahint").textContent = {none: "Без звука устройство не сможет слушать и отвечать.", i2s_simplex: "Типичная самоделка: микрофон INMP441 и усилитель MAX98357A, каждый на своих выводах.",
+    i2s_duplex: "Микрофон и усилитель на общей шине I2S.", es8311: "Кодек ES8311: звук по I2S, управление по I2C (часто общая шина с OLED).",
+    box: "Как в ESP-BOX: ES8311 для динамика и ES7210 для микрофонов."}[a.codec] || "";
+}
 function renderHw() {
   if (!HW) return;
   const d = HW.display;
+  const tg = (HWC.targets || {})[HW.target] || {};
+  $("#hw-chip").textContent = `Чип: ${tg.label || HW.target}${HW.board ? " · плата: " + HW.board : ""}. ` + (tg.touch && tg.touch.length ? "Сенсорные антенки: GPIO1–14." : "Сенсорных входов у этого чипа нет — антенки делаются кнопками.");
+  renderAudio();
   $("#hw-preset").innerHTML = `<option value="">— свой —</option>` + Object.entries(HWC.presets).map(([k, p]) => `<option value="${k}"${k === d.preset ? " selected" : ""}>${esc(p.label)}</option>`).join("");
   $("#hw-driver").innerHTML = Object.entries(HWC.drivers).map(([k, p]) => `<option value="${k}"${k === d.driver ? " selected" : ""}>${esc(p.label)}</option>`).join("");
   $("#hw-w").value = d.width; $("#hw-h").value = d.height; $("#hw-ox").value = d.offset_x; $("#hw-oy").value = d.offset_y;
@@ -943,12 +1055,14 @@ function collectHw() {
   });
   HW.outputs = HW.outputs.map((_, i) => ({name: val("out-name", i).value, type: val("out-type", i).value, pin: +val("out-pin", i).value, active_low: val("out-low", i).checked}));
   OTHER.forEach(([g, k]) => HW[g][k] = n(`#o-${g}-${k}`));
+  HW.audio.codec = $("#hw-codec").value; HW.audio.in_rate = +$("#hw-inr").value; HW.audio.out_rate = +$("#hw-outr").value;
+  Object.keys(APIN).forEach(k => { if ($("#ap-" + k)) HW.audio[k] = n("#ap-" + k); });
   CAMP.forEach(k => HW.camera.pins[k] = n("#cp-" + k));
 }
 async function saveHw() {
   collectHw();
   try {
-    const r = await api("/api/hardware", {hardware: HW}); HW = r.hardware; renderHw();
+    const r = await api("/api/hardware", {hardware: HW, device: HW_DEVICE}); HW = r.hardware; renderHw();
     $("#hw-res").style.display = ""; $("#hw-res").textContent = "Сохранено. " + r.applied; toast("Профиль железа сохранён");
   } catch (e) { $("#hw-res").style.display = ""; $("#hw-res").textContent = "Ошибка: " + e.message; toast(e.message, true); }
 }
@@ -961,7 +1075,8 @@ $("#hw-preset").onchange = () => {
 $("#hw-driver").onchange = () => { collectHw(); HW.display.preset = ""; renderHw(); };
 $("#hw-in-add").onclick = () => { collectHw(); HW.inputs.push({name: "Вход " + (HW.inputs.length + 1), type: "button", pin: -1, sensitivity: 4, tap: "wake", double: "none", hold: "listen"}); renderHw(); };
 $("#hw-out-add").onclick = () => { collectHw(); HW.outputs.push({name: "Вибро", type: "vibration", pin: -1, active_low: false}); renderHw(); };
-$("#hw-reset").onclick = async () => { if (!confirm("Вернуть заводской профиль платы zhengchen 1.54?")) return; const r = await api("/api/hardware/reset", {}); HW = r.hardware; renderHw(); toast("Заводские настройки — нажмите «Сохранить и применить»"); };
+$("#hw-reset").onclick = async () => { if (!confirm("Вернуть заводское описание этой платы?")) return; const r = await api("/api/hardware/reset", {device: HW_DEVICE}); HW = r.hardware; renderHw(); toast("Заводские настройки сохранены"); };
+$("#hw-codec").onchange = () => { collectHw(); renderAudio(); };
 $("#hw-export").onclick = () => { collectHw(); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(HW, null, 2)], {type: "application/json"})); a.download = "hardware.json"; a.click(); };
 $("#hw-import").onchange = async e => { const f = e.target.files[0]; if (!f) return; try { HW = JSON.parse(await f.text()); renderHw(); toast("Профиль загружен — проверьте и сохраните"); } catch (_) { toast("Это не JSON-профиль", true); } };
 $("#disc-on").onchange = e => save({server: {discovery: e.target.checked}}, e.target.checked ? "Автопоиск включён" : "Автопоиск выключен");
@@ -1030,6 +1145,123 @@ function renderDiscovery() {
     ["Устройство", di.device || "—"], ["Привязано к этому ПК", di.time ? (di.paired ? "да" : "привяжется сейчас") : "—"]]);
 }
 
+// ---------------- first-setup wizard ----------------
+const W = {step: 1, port: "", info: null, jobTimer: null, waitTimer: null, knownMac: "", hadWifi: false};
+const WSTEPS = ["Подключение", "Плата", "Прошивка", "Связь", "Готово"];
+function wizOpen() { $("#wiz").style.display = ""; wizGo(1); }
+function wizClose() { $("#wiz").style.display = "none"; clearInterval(W.jobTimer); clearInterval(W.waitTimer); localStorage.setItem("cv_wizard_seen", "1"); }
+function wizGo(n) {
+  W.step = n;
+  $("#wiz-steps").innerHTML = WSTEPS.map((t, i) => `<span class="${i + 1 === n ? "on" : i + 1 < n ? "done" : ""}">${i + 1}. ${t}</span>`).join("");
+  $$("#wiz [data-step]").forEach(d => d.style.display = +d.dataset.step === n ? "" : "none");
+  $("#wiz-back").style.visibility = n > 1 && n < 5 ? "" : "hidden";
+  $("#wiz-next").textContent = n === 5 ? "Закрыть" : n === 3 ? "Пропустить прошивку" : "Далее";
+  $("#wiz-next").disabled = (n === 1 && !W.info) || (n === 2 && !$("#wiz-variant").value);
+  if (n === 1) wizScan();
+  if (n === 3) wizPrepFlash();
+  if (n === 4) wizWait();
+}
+async function wizScan() {
+  $("#wiz-ports").innerHTML = `<div class="hint">Ищу платы…</div>`;
+  try {
+    const r = await api("/api/wizard/ports");
+    if (r.job && r.job.state === "running") { wizGo(3); return; }
+    if (!r.ports.length) { $("#wiz-ports").innerHTML = `<div class="note">Плата не найдена. Проверьте кабель (некоторые кабели только заряжают), зажмите BOOT и переподключите.</div>`; return; }
+    $("#wiz-ports").innerHTML = r.ports.map(p => `<button class="wiz-port" data-port="${p.port}"><b>${p.port}</b> · ${esc(p.description)}<br><span class="hint">${esc(p.kind)}${p.likely_esp ? " · похоже на ESP32" : ""}</span></button>`).join("");
+    $$(".wiz-port").forEach(b => b.onclick = () => wizProbe(b.dataset.port, b));
+  } catch (e) { $("#wiz-ports").innerHTML = `<div class="note bad">${esc(e.message)}</div>`; }
+}
+async function wizProbe(port, btn) {
+  $$(".wiz-port").forEach(b => b.disabled = true); btn.innerHTML += `<br><span class="hint">читаю плату (до минуты)…</span>`;
+  try { W.info = await api("/api/wizard/probe", {port}); W.port = port; renderWizInfo(); wizGo(2); }
+  catch (e) { toast(e.message, true); wizScan(); }
+}
+function renderWizInfo() {
+  const i = W.info, fw = i.firmware || {}, det = i.detected || {};
+  kv($("#wiz-info"), [["Порт", i.port], ["Чип", i.chip], ["Возможности", i.features], ["Флеш-память", i.flash], ["MAC", i.mac]]);
+  const what = fw.project === "arduino-lib-builder" ? "программа Arduino / PlatformIO" : fw.project;
+  $("#wiz-now").innerHTML = i.is_claudevoice ? `На плате уже стоит ClaudeVoice ${esc(fw.version)}. Прошивку можно обновить или пропустить.`
+    : i.is_xiaozhi ? `Сейчас на плате xiaozhi ${esc(fw.version)}${det.board ? ` для платы <b>${esc(det.board)}</b>` : ""}.`
+    : fw.project ? `Сейчас на плате другая прошивка: <b>${esc(what)}</b> (собрана ${esc(fw.built || fw.version)}). Мастер сохранит её копию перед заменой.`
+    : `Не удалось определить текущую прошивку.`;
+  if (!Object.keys(i.variants || {}).length) {
+    $("#wiz-now").innerHTML += `<br><b>Чип ${esc(i.chip)} пока не поддерживается универсальной прошивкой</b> (есть для ESP32-S3 и ESP32-C3).`;
+  }
+  const presets = Object.entries(i.presets || {}).filter(([, p]) => p.supported).sort((a, b) => a[0].localeCompare(b[0]));
+  $("#wiz-preset").innerHTML = `<option value="">Своя плата — пины укажу после прошивки</option>` +
+    (det.board ? `<option value="${det.board}">★ ${esc(det.board)} — найдена на плате</option>` : "") +
+    presets.filter(([k]) => k !== det.board).map(([k]) => `<option value="${k}">${esc(k)}</option>`).join("");
+  $("#wiz-preset").value = det.board || "";
+  $("#wiz-variant").innerHTML = Object.entries(i.variants || {}).map(([k, v]) => `<option value="${k}"${k === i.variant ? " selected" : ""}>${esc(v.label)}</option>`).join("");
+  $("#wiz-preset").onchange = wizPresetHint; wizPresetHint();
+}
+function wizPresetHint() {
+  const i = W.info, det = i.detected || {}, v = $("#wiz-preset").value;
+  $("#wiz-preset-hint").innerHTML = v ? `Пины, дисплей и звук возьмутся из описания платы <b>${esc(v)}</b>. Их можно поправить потом в разделе «Железо».`
+    : `Прошивка встанет без настроек дисплея и звука. После подключения откройте «Железо» и укажите, что куда припаяно.` +
+      (det.hints && det.hints.length ? ` В текущей прошивке платы упоминаются: <b>${det.hints.map(esc).join(", ")}</b>.` : "") +
+      (i.psram ? "" : " Без PSRAM глаза-анимация недоступна: будет простой интерфейс.");
+  $("#wiz-next").disabled = !$("#wiz-variant").value;
+}
+function wizPrepFlash() {
+  const i = W.info, fw = i.firmware || {};
+  $("#wiz-warn").innerHTML = `Прошивка заменит всё, что записано на плате${fw.project ? ` (<b>${esc(fw.project === "arduino-lib-builder" ? "программа Arduino" : fw.project)}</b>)` : ""}. Копия сохранится в папку <span class="mono">backups</span>.`;
+  if (!$("#wiz-ssid").value && i.wifi_ssid) $("#wiz-ssid").value = i.wifi_ssid;
+  $("#wiz-erase").checked = !i.is_claudevoice;
+  wizPollJob();
+}
+$("#wiz-go").onclick = async () => {
+  const i = W.info; W.knownMac = i.mac; W.hadWifi = !!$("#wiz-ssid").value.trim();
+  try {
+    await api("/api/wizard/start", {action: "install", port: W.port, mac: i.mac, target: i.target, variant: $("#wiz-variant").value,
+      preset: $("#wiz-preset").value, ssid: $("#wiz-ssid").value.trim(), password: $("#wiz-pass").value,
+      backup: $("#wiz-backup").checked, erase: $("#wiz-erase").checked});
+    wizPollJob();
+  } catch (e) { toast(e.message, true); }
+};
+function wizPollJob() {
+  clearInterval(W.jobTimer);
+  const tick = async () => {
+    const r = await api("/api/wizard/job").catch(() => null); const j = r && r.job; if (!j) return;
+    $("#wiz-bar").style.width = j.progress + "%";
+    $("#wiz-job").textContent = (j.message || "") + (j.state === "running" ? ` · ${Math.round(j.progress)}% · ${j.seconds} с` : j.state === "done" ? " — готово" : "");
+    $("#wiz-log").textContent = j.log.join("\n"); $("#wiz-log").scrollTop = 1e9;
+    $("#wiz-go").disabled = j.state === "running";
+    if (j.state === "running") return;
+    clearInterval(W.jobTimer);
+    if (j.state === "failed") { toast(j.message, true); return; }
+    if (j.kind === "install" && W.step === 3) {
+      toast("Прошивка записана" + (j.result.backup ? ". Копия: " + j.result.backup : ""));
+      $("#wiz-wifi-help").style.display = W.hadWifi ? "none" : ""; wizGo(4);
+    }
+  };
+  tick(); W.jobTimer = setInterval(tick, 1000);
+}
+function wizWait() {
+  clearInterval(W.waitTimer);
+  const mac = (W.knownMac || "").toLowerCase(), since = Date.now() / 1000 - 5;
+  $("#wiz-wait").textContent = W.hadWifi ? "Устройство подключается к Wi-Fi и ищет этот компьютер…" : "Жду, когда устройство появится в сети…";
+  W.waitTimer = setInterval(async () => {
+    const s = await api("/api/state").catch(() => null); if (!s || s.loading) return;
+    const di = s.server.discovery || {}, ota = s.device.last_ota || {};
+    const seen = (di.device && di.time > since && (!mac || di.device.toLowerCase() === mac)) ||
+                 (ota.device_id && ota.time > since && (!mac || ota.device_id.toLowerCase() === mac));
+    if (seen) {
+      clearInterval(W.waitTimer);
+      $("#wiz-done").innerHTML = `Устройство <b>${esc(mac || di.device || ota.device_id)}</b> подключилось к этому компьютеру${ota.version ? ` (прошивка ${esc(ota.version)})` : ""}. ` +
+        ($("#wiz-preset").value ? "Скажите триггерное слово или нажмите кнопку — и говорите." : "Теперь укажите в разделе «Железо», какие дисплей, микрофон и динамик подключены.");
+      wizGo(5);
+    }
+  }, 2000);
+}
+$("#wiz-x").onclick = wizClose;
+$("#wiz-back").onclick = () => wizGo(Math.max(1, W.step - 1));
+$("#wiz-next").onclick = () => W.step === 5 ? wizClose() : wizGo(W.step + 1);
+$("#wiz-scan").onclick = wizScan;
+$$("#wiz [data-goto]").forEach(b => b.onclick = () => { wizClose(); HW_DEVICE = W.knownMac || HW_DEVICE; $$("#nav a").find(a => a.dataset.s === b.dataset.goto).click(); });
+$("#wiz-open").onclick = wizOpen;
+if (location.hash === "#wizard") setTimeout(wizOpen, 300);
+
 async function refresh() {
   try {
     const st = await api("/api/state" + (["overview", "device", "pins"].includes(tab) ? "?device=1" : ""));
@@ -1038,7 +1270,8 @@ async function refresh() {
     if (st.loading) { $("#loading-stage").textContent = st.stage; pill("#p-server", "warn", "загрузка: " + st.stage); return; }
     const wasLoading = !S; S = st;
     render();
-    if (wasLoading) { loadOllama(); if (tab === "skins") loadSkins(); if (tab === "persona") loadPersonas(); }
+    if (wasLoading) { loadOllama(); if (tab === "skins") loadSkins(); if (tab === "persona") loadPersonas();
+      if (!S.device.last_ota.time && !localStorage.getItem("cv_wizard_seen")) wizOpen(); }   // first run: no device yet
     if (S.device.connected && !wasOnline && tab === "pins") loadPins();
     wasOnline = S.device.connected;
   } catch { pill("#p-server", "bad", "сервер недоступен"); }

@@ -391,41 +391,137 @@ async def tools_call(request):
     return web.json_response({"result": result})
 
 
-# ---------------- hardware profile ----------------
-async def hardware_get(request):
+# ---------------- first-setup wizard ----------------
+async def wizard_ports(request):
+    from . import flasher
+    return web.json_response({"ports": await asyncio.to_thread(flasher.list_ports), "job": flasher.current_job()})
+
+
+async def wizard_probe(request):
+    from . import flasher
+    port = (await request.json()).get("port", "")
+    try:
+        info = await asyncio.to_thread(flasher.probe, port)
+    except Exception as e:
+        raise web.HTTPBadRequest(text=str(e))
     from . import hardware
-    return web.json_response({"hardware": hardware.load(), "catalog": hardware.catalog(),
-                              "file": str(hardware.path())})
+    info["boards"] = flasher.boards(info["target"])
+    info["presets"] = {k: {"label": v["label"], "supported": v["supported"]}
+                       for k, v in hardware.board_presets(info["target"]).items()}
+    info["variants"] = {k: v for k, v in flasher.VARIANTS.items() if v["target"] == info["target"]}
+    info["known_profile"] = hardware.load(info.get("mac", "")) is not None if info.get("mac") else False
+    info["wifi_ssid"] = await asyncio.to_thread(_pc_wifi_ssid)
+    return web.json_response(info)
+
+
+def _pc_wifi_ssid() -> str:
+    """The Wi-Fi network this PC is on (to prefill the wizard), '' if it uses a cable."""
+    import re
+    import subprocess
+    try:
+        out = subprocess.run(["netsh", "wlan", "show", "interfaces"], capture_output=True, text=True, timeout=8,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), encoding="cp866",
+                             errors="replace").stdout
+    except Exception:
+        return ""
+    m = re.search(r"^\s*SSID\s*:\s*(.+)$", out, re.M)
+    return m.group(1).strip() if m else ""
+
+
+async def wizard_job(request):
+    from . import flasher
+    return web.json_response({"job": flasher.current_job()})
+
+
+async def wizard_start(request):
+    """{"action": "backup"|"build"|"flash", ...}"""
+    from . import flasher
+    b = await request.json()
+    try:
+        if b.get("action") == "backup":
+            job = flasher.start_backup(b["port"], b.get("mac", ""), b.get("flash", ""))
+        elif b.get("action") == "build":
+            job = flasher.start_build(b["board"])
+        elif b.get("action") == "flash":
+            job = flasher.start_flash(b["port"], b["board"], bool(b.get("erase")))
+        elif b.get("action") == "install":
+            from . import discovery, hardware
+            svc = _svc(request)
+            profile = b.get("profile") or hardware.from_preset(b.get("preset", ""), b.get("target", ""))
+            profile["target"] = b.get("target") or profile.get("target", "esp32s3")
+            profile = hardware.validate(profile)
+            if b.get("mac"):
+                hardware.save(profile, b["mac"])          # the server keeps this board's profile from now on
+            ota = f"http://{svc.cfg.server.lan_host()}:{svc.cfg.server.port}/xiaozhi/ota/"
+            job = flasher.start_install(b["port"], b["variant"], profile, b.get("ssid", ""), b.get("password", ""),
+                                        ota, discovery.server_id(), bool(b.get("erase", True)),
+                                        bool(b.get("backup", True)), b.get("mac", ""))
+        else:
+            raise RuntimeError("неизвестное действие")
+    except (RuntimeError, KeyError, OSError, ValueError) as e:
+        raise web.HTTPBadRequest(text=str(e))
+    return web.json_response({"job": job})
+
+
+# ---------------- hardware profile ----------------
+def _current_device(svc) -> str:
+    dev = svc.devices.current()
+    if dev is not None and dev.device_id not in ("", "?"):
+        return dev.device_id
+    return (svc.last_ota or {}).get("device_id", "")
+
+
+async def hardware_get(request):
+    """?device=<mac> (default: the connected / last seen device). Unknown devices get their board preset."""
+    from . import hardware
+    svc = _svc(request)
+    device = request.query.get("device") or _current_device(svc)
+    hw = hardware.load(device) if device else None
+    if hw is None:
+        hw = hardware.load("") if not hardware.devices() else hardware.from_preset("", "esp32s3")
+    return web.json_response({"hardware": hw, "device": device, "devices": hardware.devices(),
+                              "catalog": hardware.catalog(), "file": str(hardware.path())})
 
 
 async def hardware_save(request):
-    """Validate and store; then ask the device to fetch it (it reboots itself if pins/display changed)."""
+    """Validate and store for that device; then ask it to fetch it (it reboots itself if pins/display changed)."""
     from . import hardware
     body = await request.json()
+    svc = _svc(request)
+    device = body.get("device") or _current_device(svc)
     try:
-        hw = hardware.save(body.get("hardware") or body)
+        hw = hardware.save(body.get("hardware") or body, device)
     except (ValueError, TypeError, KeyError) as e:
         raise web.HTTPBadRequest(text=str(e))
-    svc = _svc(request)
     applied = "Устройство не на связи: применится при следующем включении."
     dev = svc.devices.current()
-    if dev is not None and "self.hw.reload" in [t["name"] for t in (dev.mcp_tools or [])]:
+    if dev is not None and device and dev.device_id.lower() != device.lower():
+        applied = "Сохранено для другого устройства: применится, когда оно подключится."
+    elif dev is not None and "self.hw.reload" in [t["name"] for t in (dev.mcp_tools or [])]:
         try:
             applied = str(await _device_call(svc, "self.hw.reload", {"url": hardware_url(svc.cfg)}, timeout=8))
         except Exception as e:
             applied = f"Устройство не ответило: {e}"
     elif dev is not None:
         applied = "Прошивка устройства не умеет применять профиль: обновите прошивку."
-    return web.json_response({"hardware": hw, "applied": applied})
+    return web.json_response({"hardware": hw, "device": device, "applied": applied})
 
 
 async def hardware_reset(request):
     from . import hardware
-    try:
-        hardware.path().unlink()
-    except OSError:
-        pass
-    return web.json_response({"hardware": hardware.load()})
+    body = await request.json() if request.can_read_body else {}
+    device = body.get("device") or _current_device(_svc(request))
+    if body.get("preset"):          # "load a board description": not saved until the user presses Save
+        return web.json_response({"hardware": hardware.from_preset(body["preset"], body.get("target", "")),
+                                  "device": device})
+    return web.json_response({"hardware": hardware.reset(device), "device": device})
+
+
+async def hardware_presets(request):
+    from . import hardware
+    t = request.query.get("target", "")
+    return web.json_response({"presets": {k: {"label": v["label"], "target": v["target"], "supported": v["supported"]}
+                                          for k, v in hardware.board_presets(t).items()}})
 
 
 def hardware_url(cfg) -> str:
@@ -433,9 +529,17 @@ def hardware_url(cfg) -> str:
 
 
 async def device_hardware(request):
-    """Public: the firmware downloads its hardware profile here."""
+    """Public: the firmware downloads its hardware profile here (Device-Id = its MAC). 404 = no profile
+    for this device: it keeps the one it has (written by the setup wizard)."""
     from . import hardware
-    return web.json_response(hardware.to_device(hardware.load()))
+    svc = _svc(request)
+    device = request.headers.get("Device-Id", "")
+    if not device and (svc.last_ota or {}).get("ip") == request.remote:   # firmware 2.4.0 sends no Device-Id
+        device = svc.last_ota.get("device_id", "")
+    hw = hardware.load(device) if device else hardware.load("")
+    if hw is None:
+        raise web.HTTPNotFound(text="no profile for this device")
+    return web.json_response(hardware.to_device(hw))
 
 
 # ---------------- characters ----------------
@@ -504,8 +608,13 @@ def setup_routes(app: web.Application):
     r.add_get("/api/hardware", hardware_get)
     r.add_post("/api/hardware", hardware_save)
     r.add_post("/api/hardware/reset", hardware_reset)
+    r.add_get("/api/hardware/presets", hardware_presets)
     r.add_get("/device/hardware.json", device_hardware)
     r.add_post("/api/tools/call", tools_call)
+    r.add_get("/api/wizard/ports", wizard_ports)
+    r.add_post("/api/wizard/probe", wizard_probe)
+    r.add_get("/api/wizard/job", wizard_job)
+    r.add_post("/api/wizard/start", wizard_start)
     r.add_get("/api/openai/models", openai_models)
     r.add_get("/api/openai/discover", openai_discover)
     r.add_post("/api/openai/start", openai_start)

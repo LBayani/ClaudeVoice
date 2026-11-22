@@ -60,14 +60,20 @@ async def push_hardware(devices: "DeviceRegistry") -> str:
 
 
 # ---------------- body: inputs (antennae, buttons) ----------------
+def _device_profile(devices) -> tuple[str, dict]:
+    dev = devices.current()
+    device = dev.device_id if dev is not None and dev.device_id not in ("", "?") else ""
+    return device, (hardware.load(device) if device else None) or hardware.load("")
+
+
 async def body_inputs(devices) -> str:
-    hw = hardware.load()
+    _, hw = _device_profile(devices)
     return json.dumps({"inputs": hw["inputs"], "outputs": hw["outputs"],
                        "available_actions": hardware.ACTIONS}, ensure_ascii=False)
 
 
 async def body_set_input_action(devices, input: str, gesture: str, actions: str) -> str:
-    hw = hardware.load()
+    device, hw = _device_profile(devices)
     if gesture not in hardware.GESTURES:
         raise ValueError("gesture: tap, double или hold")
     target = next((i for i in hw["inputs"] if i["name"].lower() == str(input).lower()
@@ -75,7 +81,7 @@ async def body_set_input_action(devices, input: str, gesture: str, actions: str)
     if target is None:
         raise ValueError("нет такого входа; есть: " + ", ".join(i["name"] for i in hw["inputs"]))
     target[gesture] = actions
-    hardware.save(hw)   # validates the action names
+    hardware.save(hw, device)   # validates the action names
     applied = await push_hardware(devices)
     return f"«{target['name']}», жест {gesture}: {actions}. {applied}"
 

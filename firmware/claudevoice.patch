@@ -10,7 +10,7 @@ index 652c682..eb94cf8 100755
 +set(PROJECT_VER "2.4.0")
  project(xiaozhi)
 diff --git a/main/CMakeLists.txt b/main/CMakeLists.txt
-index ebb2139..7f32cd7 100644
+index ebb2139..5491c19 100644
 --- a/main/CMakeLists.txt
 +++ b/main/CMakeLists.txt
 @@ -33,6 +33,7 @@ set(SOURCES "audio/audio_codec.cc"
@@ -21,7 +21,38 @@ index ebb2139..7f32cd7 100644
              "settings.cc"
              "device_state_machine.cc"
              "assets.cc"
-@@ -903,6 +904,11 @@ idf_component_register(SRCS ${SOURCES}
+@@ -634,6 +635,15 @@ elseif(CONFIG_BOARD_TYPE_ESP_S3_LCD_EV_Board_2)
+     set(BUILTIN_TEXT_FONT font_puhui_basic_30_4)
+     set(BUILTIN_ICON_FONT font_awesome_30_4)
+     set(DEFAULT_EMOJI_COLLECTION twemoji_64)
++elseif(CONFIG_BOARD_TYPE_CLAUDEVOICE_S3)
++    set(BOARD_TYPE "claudevoice-s3")
++    set(BUILTIN_TEXT_FONT font_puhui_basic_20_4)
++    set(BUILTIN_ICON_FONT font_awesome_20_4)
++    set(DEFAULT_EMOJI_COLLECTION twemoji_64)
++elseif(CONFIG_BOARD_TYPE_CLAUDEVOICE_C3)
++    set(BOARD_TYPE "claudevoice-c3")
++    set(BUILTIN_TEXT_FONT font_puhui_basic_14_1)
++    set(BUILTIN_ICON_FONT font_awesome_14_1)
+ elseif(CONFIG_BOARD_TYPE_ZHENGCHEN_1_54TFT_WIFI)
+     set(BOARD_TYPE "zhengchen-1.54tft-wifi")
+     set(BUILTIN_TEXT_FONT font_puhui_basic_20_4)
+@@ -738,6 +748,14 @@ else()
+ endif()
+ list(APPEND SOURCES ${BOARD_SOURCES})
+ 
++# ClaudeVoice: shared body code (eyes, skins, antennae, hardware profile) for its boards
++if(BOARD_TYPE STREQUAL "zhengchen-1.54tft-wifi" OR BOARD_TYPE MATCHES "^claudevoice-")
++    file(GLOB CV_COMMON_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/boards/claudevoice-common/*.cc)
++    list(APPEND SOURCES ${CV_COMMON_SOURCES})
++    list(APPEND INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/boards/claudevoice-common
++                             ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_TYPE})
++endif()
++
+ # Select audio processor according to Kconfig
+ if(CONFIG_USE_AUDIO_PROCESSOR)
+     list(APPEND SOURCES "audio/processors/afe_audio_processor.cc")
+@@ -903,6 +921,11 @@ idf_component_register(SRCS ${SOURCES}
                          esp_driver_spi
                          esp_driver_i2c
                          esp_driver_i2s
@@ -33,6 +64,23 @@ index ebb2139..7f32cd7 100644
                          esp_driver_jpeg
                          esp_driver_ppa
                          esp_app_format
+diff --git a/main/Kconfig.projbuild b/main/Kconfig.projbuild
+index b4119fc..3578d00 100644
+--- a/main/Kconfig.projbuild
++++ b/main/Kconfig.projbuild
+@@ -464,6 +464,12 @@ choice BOARD_TYPE
+     config BOARD_TYPE_ESP_S3_LCD_EV_Board_2
+         bool "乐鑫ESP S3 LCD EV Board 2开发板"
+         depends on IDF_TARGET_ESP32S3
++    config BOARD_TYPE_CLAUDEVOICE_S3
++        bool "ClaudeVoice universal ESP32-S3 (pins from the hardware profile)"
++        depends on IDF_TARGET_ESP32S3
++    config BOARD_TYPE_CLAUDEVOICE_C3
++        bool "ClaudeVoice universal ESP32-C3 (pins from the hardware profile)"
++        depends on IDF_TARGET_ESP32C3
+     config BOARD_TYPE_ZHENGCHEN_1_54TFT_WIFI
+         bool "征辰科技1.54(WIFI)"
+         depends on IDF_TARGET_ESP32S3
 diff --git a/main/application.cc b/main/application.cc
 index d69d43d..aea72a7 100644
 --- a/main/application.cc
@@ -85,28 +133,400 @@ index 350ac58..231d40a 100644
          codec_->OutputData(task->pcm);
  
          /* Update the last output time */
-diff --git a/main/boards/zhengchen-1.54tft-wifi/config.json b/main/boards/zhengchen-1.54tft-wifi/config.json
-index 3c17d11..9df9692 100644
---- a/main/boards/zhengchen-1.54tft-wifi/config.json
-+++ b/main/boards/zhengchen-1.54tft-wifi/config.json
-@@ -3,7 +3,10 @@
-     "builds": [
-         {
-             "name": "zhengchen-1.54tft-wifi",
--            "sdkconfig_append": []
+diff --git a/main/boards/claudevoice-c3/claudevoice-c3.cc b/main/boards/claudevoice-c3/claudevoice-c3.cc
+new file mode 100644
+index 0000000..571d12b
+--- /dev/null
++++ b/main/boards/claudevoice-c3/claudevoice-c3.cc
+@@ -0,0 +1,4 @@
++// ClaudeVoice universal board: everything is configured by the hardware profile (see cv_generic_board.h).
++#include "cv_generic_board.h"
++
++DECLARE_BOARD(CvGenericBoard);
+diff --git a/main/boards/claudevoice-c3/config.h b/main/boards/claudevoice-c3/config.h
+new file mode 100644
+index 0000000..40f219e
+--- /dev/null
++++ b/main/boards/claudevoice-c3/config.h
+@@ -0,0 +1,15 @@
++// ClaudeVoice universal ESP32-C3 board: the real wiring comes from the hardware profile (set by the
++// setup wizard or the app). This is only the factory profile used before one is stored.
++#ifndef _BOARD_CONFIG_H_
++#define _BOARD_CONFIG_H_
++
++#include <driver/gpio.h>
++
++#define AUDIO_INPUT_SAMPLE_RATE  16000
++#define AUDIO_OUTPUT_SAMPLE_RATE 24000
++
++// Hold BOOT right after power-on (not during it) to start with this factory profile.
++#define CV_SAFE_MODE_GPIO GPIO_NUM_9
++#define CV_DEFAULT_PROFILE "{\"buttons\":{\"boot\":9}}"
++
++#endif
+diff --git a/main/boards/claudevoice-c3/config.json b/main/boards/claudevoice-c3/config.json
+new file mode 100644
+index 0000000..030ec3f
+--- /dev/null
++++ b/main/boards/claudevoice-c3/config.json
+@@ -0,0 +1,16 @@
++{
++    "target": "esp32c3",
++    "builds": [
++        {
++            "name": "claudevoice-c3-4m",
 +            "sdkconfig_append": [
++                "CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y",
++                "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/4m.csv\"",
++                "CONFIG_USE_ESP_WAKE_WORD=y",
++                "CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y",
 +                "CONFIG_OTA_URL=\"http://claudevoice.local:8765/xiaozhi/ota/\"",
 +                "CONFIG_LANGUAGE_RU_RU=y"
 +            ]
-         }
-     ]
- }
-\ No newline at end of file
-diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_eyes.cc b/main/boards/zhengchen-1.54tft-wifi/cv_eyes.cc
++        }
++    ]
++}
+diff --git a/main/boards/claudevoice-common/cv_board_util.cc b/main/boards/claudevoice-common/cv_board_util.cc
+new file mode 100644
+index 0000000..9f91642
+--- /dev/null
++++ b/main/boards/claudevoice-common/cv_board_util.cc
+@@ -0,0 +1,290 @@
++#include "cv_board_util.h"
++
++#include "application.h"
++#include "codecs/box_audio_codec.h"
++#include "codecs/dummy_audio_codec.h"
++#include "codecs/es8311_audio_codec.h"
++#include "codecs/no_audio_codec.h"
++#include "cv_eyes_display.h"
++#include "display/lcd_display.h"
++#include "display/oled_display.h"
++#include "mcp_server.h"
++#include "settings.h"
++
++#include <driver/spi_common.h>
++#include <esp_heap_caps.h>
++#include <esp_lcd_panel_io.h>
++#include <esp_lcd_panel_ops.h>
++#include <esp_lcd_panel_ssd1306.h>
++#include <esp_lcd_panel_vendor.h>
++#include <esp_log.h>
++#include <soc/soc_caps.h>
++
++#include "esp_lcd_gc9a01.h"
++#include "esp_lcd_ili9341.h"
++#include "esp_lcd_panel_sh1106.h"
++#if __has_include("esp_lcd_st7796.h")
++#include "esp_lcd_st7796.h"
++#define CV_HAS_ST7796 1
++#endif
++
++#if CONFIG_IDF_TARGET_ESP32S3
++#include "esp32_camera.h"
++#endif
++
++#define TAG "CvBoard"
++
++namespace cv {
++
++namespace {
++struct Bus { int sda, scl; i2c_master_bus_handle_t handle; };
++Bus g_buses[SOC_I2C_NUM] = {};
++int g_bus_count = 0;
++
++#if SOC_SPI_PERIPH_NUM > 2
++constexpr spi_host_device_t kLcdHost = SPI3_HOST;
++#else
++constexpr spi_host_device_t kLcdHost = SPI2_HOST;
++#endif
++}  // namespace
++
++i2c_master_bus_handle_t I2cBus(int sda, int scl) {
++    if (sda < 0 || scl < 0) return nullptr;
++    for (int i = 0; i < g_bus_count; i++) {
++        if (g_buses[i].sda == sda && g_buses[i].scl == scl) return g_buses[i].handle;
++    }
++    if (g_bus_count >= SOC_I2C_NUM) {
++        ESP_LOGE(TAG, "no free I2C controller for SDA %d / SCL %d (this chip has %d)", sda, scl, SOC_I2C_NUM);
++        return nullptr;
++    }
++    i2c_master_bus_config_t cfg = {};
++    cfg.i2c_port = (i2c_port_t)g_bus_count;
++    cfg.sda_io_num = (gpio_num_t)sda;
++    cfg.scl_io_num = (gpio_num_t)scl;
++    cfg.clk_source = I2C_CLK_SRC_DEFAULT;
++    cfg.glitch_ignore_cnt = 7;
++    cfg.flags.enable_internal_pullup = 1;
++    i2c_master_bus_handle_t h = nullptr;
++    if (i2c_new_master_bus(&cfg, &h) != ESP_OK) {
++        ESP_LOGE(TAG, "I2C bus on SDA %d / SCL %d failed", sda, scl);
++        return nullptr;
++    }
++    g_buses[g_bus_count++] = {sda, scl, h};
++    return h;
++}
++
++static Display* CreateOled(const HwDisplay& d) {
++    auto bus = I2cBus(d.sda, d.scl);
++    if (!bus) return new NoDisplay();
++    esp_lcd_panel_io_handle_t io = nullptr;
++    esp_lcd_panel_handle_t panel = nullptr;
++    esp_lcd_panel_io_i2c_config_t io_config = {};
++    io_config.dev_addr = (uint32_t)d.i2c_addr;
++    io_config.control_phase_bytes = 1;
++    io_config.dc_bit_offset = 6;
++    io_config.lcd_cmd_bits = 8;
++    io_config.lcd_param_bits = 8;
++    io_config.scl_speed_hz = 400 * 1000;
++    if (esp_lcd_new_panel_io_i2c_v2(bus, &io_config, &io) != ESP_OK) return new NoDisplay();
++    esp_lcd_panel_dev_config_t panel_config = {};
++    panel_config.reset_gpio_num = PinOrNc(d.rst);
++    panel_config.bits_per_pixel = 1;
++    esp_lcd_panel_ssd1306_config_t ssd1306_config = {};
++    ssd1306_config.height = (uint8_t)d.height;
++    esp_err_t err;
++    if (d.driver == "sh1106") {
++        err = esp_lcd_new_panel_sh1106(io, &panel_config, &panel);
++    } else {
++        panel_config.vendor_config = &ssd1306_config;
++        err = esp_lcd_new_panel_ssd1306(io, &panel_config, &panel);
++    }
++    if (err != ESP_OK || esp_lcd_panel_reset(panel) != ESP_OK || esp_lcd_panel_init(panel) != ESP_OK) {
++        ESP_LOGE(TAG, "OLED %s init failed", d.driver.c_str());
++        return new NoDisplay();
++    }
++    esp_lcd_panel_disp_on_off(panel, true);
++    return new OledDisplay(io, panel, d.width, d.height, d.mirror_x, d.mirror_y);
++}
++
++Display* CreateDisplay(const HwDisplay& d, CvEyesDisplay** eyes) {
++    *eyes = nullptr;
++    if (d.driver == "none" || d.driver.empty()) return new NoDisplay();
++    if (d.IsOled()) return CreateOled(d);
++    if (d.mosi < 0 || d.sclk < 0) {
++        ESP_LOGE(TAG, "display %s: MOSI/SCLK pins are not set", d.driver.c_str());
++        return new NoDisplay();
++    }
++    spi_bus_config_t buscfg = {};
++    buscfg.mosi_io_num = d.mosi;
++    buscfg.miso_io_num = GPIO_NUM_NC;
++    buscfg.sclk_io_num = d.sclk;
++    buscfg.quadwp_io_num = GPIO_NUM_NC;
++    buscfg.quadhd_io_num = GPIO_NUM_NC;
++    buscfg.max_transfer_sz = d.width * d.height * sizeof(uint16_t);
++    if (spi_bus_initialize(kLcdHost, &buscfg, SPI_DMA_CH_AUTO) != ESP_OK) return new NoDisplay();
++
++    esp_lcd_panel_io_handle_t io = nullptr;
++    esp_lcd_panel_handle_t panel = nullptr;
++    esp_lcd_panel_io_spi_config_t io_config = {};
++    io_config.cs_gpio_num = PinOrNc(d.cs);
++    io_config.dc_gpio_num = PinOrNc(d.dc);
++    io_config.spi_mode = d.spi_mode;
++    io_config.pclk_hz = d.pclk_mhz * 1000 * 1000;
++    io_config.trans_queue_depth = 10;
++    io_config.lcd_cmd_bits = 8;
++    io_config.lcd_param_bits = 8;
++    if (esp_lcd_new_panel_io_spi(kLcdHost, &io_config, &io) != ESP_OK) return new NoDisplay();
++
++    esp_lcd_panel_dev_config_t panel_config = {};
++    panel_config.reset_gpio_num = PinOrNc(d.rst);
++    panel_config.rgb_ele_order = d.bgr ? LCD_RGB_ELEMENT_ORDER_BGR : LCD_RGB_ELEMENT_ORDER_RGB;
++    panel_config.bits_per_pixel = 16;
++    esp_err_t err;
++    if (d.driver == "gc9a01") err = esp_lcd_new_panel_gc9a01(io, &panel_config, &panel);
++    else if (d.driver == "ili9341") err = esp_lcd_new_panel_ili9341(io, &panel_config, &panel);
++#ifdef CV_HAS_ST7796
++    else if (d.driver == "st7796") err = esp_lcd_new_panel_st7796(io, &panel_config, &panel);
++#endif
++    else err = esp_lcd_new_panel_st7789(io, &panel_config, &panel);
++    if (err != ESP_OK) {
++        ESP_LOGE(TAG, "display driver %s failed: %s", d.driver.c_str(), esp_err_to_name(err));
++        return new NoDisplay();
++    }
++    esp_lcd_panel_reset(panel);
++    esp_lcd_panel_init(panel);
++    esp_lcd_panel_swap_xy(panel, d.swap_xy);
++    esp_lcd_panel_mirror(panel, d.mirror_x, d.mirror_y);
++    esp_lcd_panel_invert_color(panel, d.invert);
++    esp_lcd_panel_disp_on_off(panel, true);
++
++    // The animated eyes need ~250 KB of frame buffers: only with PSRAM.
++    if (heap_caps_get_total_size(MALLOC_CAP_SPIRAM) > 0) {
++        auto* e = new CvEyesDisplay(io, panel, d.width, d.height, d.offset_x, d.offset_y, d.mirror_x, d.mirror_y,
++                                    d.swap_xy);
++        e->SetupHighTempWarningPopup();
++        *eyes = e;
++        return e;
++    }
++    return new SpiLcdDisplay(io, panel, d.width, d.height, d.offset_x, d.offset_y, d.mirror_x, d.mirror_y, d.swap_xy);
++}
++
++AudioCodec* CreateAudioCodec(const HwAudio& a) {
++    if (a.codec == "i2s_simplex" && a.spk_dout >= 0 && a.mic_din >= 0) {
++        return new NoAudioCodecSimplex(a.in_rate, a.out_rate, PinOrNc(a.spk_bclk), PinOrNc(a.spk_lrck),
++                                       PinOrNc(a.spk_dout), PinOrNc(a.mic_sck), PinOrNc(a.mic_ws), PinOrNc(a.mic_din));
++    }
++    if (a.codec == "i2s_duplex" && a.bclk >= 0) {
++        return new NoAudioCodecDuplex(a.in_rate, a.out_rate, PinOrNc(a.bclk), PinOrNc(a.ws), PinOrNc(a.dout),
++                                      PinOrNc(a.din));
++    }
++    if (a.codec == "es8311" || a.codec == "box") {
++        auto bus = I2cBus(a.i2c_sda, a.i2c_scl);
++        if (bus) {
++            if (a.codec == "box") {
++                return new BoxAudioCodec(bus, a.in_rate, a.out_rate, PinOrNc(a.mclk), PinOrNc(a.bclk), PinOrNc(a.ws),
++                                         PinOrNc(a.dout), PinOrNc(a.din), PinOrNc(a.pa), (uint8_t)a.es8311_addr,
++                                         (uint8_t)a.es7210_addr, false);
++            }
++            i2c_port_t port = I2C_NUM_0;
++            for (int i = 0; i < g_bus_count; i++) if (g_buses[i].handle == bus) port = (i2c_port_t)i;
++            return new Es8311AudioCodec(bus, port, a.in_rate, a.out_rate, PinOrNc(a.mclk), PinOrNc(a.bclk),
++                                        PinOrNc(a.ws), PinOrNc(a.dout), PinOrNc(a.din), PinOrNc(a.pa),
++                                        (uint8_t)a.es8311_addr, a.use_mclk, a.pa_inverted);
++        }
++    }
++    if (a.codec != "none") ESP_LOGE(TAG, "audio codec '%s' is not fully configured: running without sound", a.codec.c_str());
++    return new DummyAudioCodec(a.in_rate, a.out_rate);
++}
++
++Camera* CreateCamera(const HwCamera& c) {
++#if CONFIG_IDF_TARGET_ESP32S3
++    if (c.type != "board") return nullptr;
++    camera_config_t config = {};
++    config.pin_d0 = c.d[0]; config.pin_d1 = c.d[1]; config.pin_d2 = c.d[2]; config.pin_d3 = c.d[3];
++    config.pin_d4 = c.d[4]; config.pin_d5 = c.d[5]; config.pin_d6 = c.d[6]; config.pin_d7 = c.d[7];
++    config.pin_xclk = c.xclk;
++    config.pin_pclk = c.pclk;
++    config.pin_vsync = c.vsync;
++    config.pin_href = c.href;
++    config.pin_sccb_sda = c.sda;
++    config.pin_sccb_scl = c.scl;
++    config.sccb_i2c_port = 1;
++    config.pin_pwdn = c.pwdn;
++    config.pin_reset = c.reset;
++    config.xclk_freq_hz = 20000000;
++    config.pixel_format = PIXFORMAT_RGB565;
++    config.frame_size = FRAMESIZE_QVGA;
++    config.jpeg_quality = 12;
++    config.fb_count = 1;
++    config.fb_location = CAMERA_FB_IN_PSRAM;
++    config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
++    ESP_LOGI(TAG, "camera module from the hardware profile");
++    return new Esp32Camera(config);
++#else
++    return nullptr;
++#endif
++}
++
++static std::string ActiveSkinUrl() {
++    Settings settings("wifi", false);
++    std::string url = settings.GetString("ota_url");
++    if (url.empty()) url = CONFIG_OTA_URL;
++    auto p = url.find("/xiaozhi/ota");
++    return (p == std::string::npos ? url : url.substr(0, p)) + "/skins/active.json";
++}
++
++static void BootTask(void* arg) {
++    auto** eyes = static_cast<CvEyesDisplay**>(arg);
++    auto& app = Application::GetInstance();
++    for (int i = 0; i < 120 && app.GetDeviceState() != kDeviceStateIdle; i++) vTaskDelay(pdMS_TO_TICKS(1000));
++    if (app.GetDeviceState() == kDeviceStateIdle) {
++        ESP_LOGI(TAG, "hardware profile: %s", HwReload("").c_str());
++        if (*eyes) ESP_LOGI(TAG, "loading skin: %s", (*eyes)->LoadSkinFromUrl(ActiveSkinUrl()).c_str());
++    }
++    vTaskDelete(nullptr);
++}
++
++void StartBootTask(CvEyesDisplay** eyes) {
++    xTaskCreate(BootTask, "cv_boot", 6144, eyes, 2, nullptr);
++}
++
++void RegisterEyeTools(CvEyesDisplay** eyes) {
++    auto& mcp = McpServer::GetInstance();
++    mcp.AddTool("self.eyes.load_skin",
++        "Download a screen skin JSON from the voice server and apply it now. `url`: skin address "
++        "(normally http://<server>/skins/active.json).",
++        PropertyList({Property("url", kPropertyTypeString)}),
++        [eyes](const PropertyList& properties) -> ReturnValue {
++            if (!*eyes) return std::string("this screen has no animated eyes");
++            return (*eyes)->LoadSkinFromUrl(properties["url"].value<std::string>());
++        });
++    mcp.AddTool("self.eyes.set_style",
++        "Switch the screen look. `style`: `classic` (retro CRT camera-lens eyes), `circuit` (circuit-board "
++        "robot face), `pixel` (8-bit game eyes), `hud` (holographic AI core), `orb` (glowing assistant orb), "
++        "`pet` (soft cute robot eyes), `minimal` (two dots and a voice line) or `eye` (one realistic eye). "
++        "Combine with self.eyes.set_color. Persists across reboots.",
++        PropertyList({Property("style", kPropertyTypeString)}),
++        [eyes](const PropertyList& properties) -> ReturnValue {
++            if (!*eyes) return std::string("this screen has no animated eyes");
++            return (*eyes)->SetEyeStyle(properties["style"].value<std::string>());
++        });
++    mcp.AddTool("self.eyes.set_color",
++        "Set the color of the robot eyes / screen phosphor. `color`: `amber` (default) or `green`. Persists across reboots.",
++        PropertyList({Property("color", kPropertyTypeString)}),
++        [eyes](const PropertyList& properties) -> ReturnValue {
++            if (!*eyes) return std::string("this screen has no animated eyes");
++            return (*eyes)->SetEyeColor(properties["color"].value<std::string>());
++        });
++    mcp.AddTool("self.eyes.show_emotion",
++        "Make the robot eyes show an emotion for a few seconds. `emotion`: neutral, happy, sad, angry, "
++        "surprised, thinking or sleepy. `seconds`: how long to hold it (1-60).",
++        PropertyList({Property("emotion", kPropertyTypeString),
++                      Property("seconds", kPropertyTypeInteger, 5, 1, 60)}),
++        [eyes](const PropertyList& properties) -> ReturnValue {
++            if (!*eyes) return std::string("this screen has no animated eyes");
++            return (*eyes)->ShowEyeEmotion(properties["emotion"].value<std::string>(),
++                                           properties["seconds"].value<int>());
++        });
++}
++
++}  // namespace cv
+diff --git a/main/boards/claudevoice-common/cv_board_util.h b/main/boards/claudevoice-common/cv_board_util.h
+new file mode 100644
+index 0000000..065507c
+--- /dev/null
++++ b/main/boards/claudevoice-common/cv_board_util.h
+@@ -0,0 +1,34 @@
++// Building blocks shared by the ClaudeVoice boards: everything is created from the hardware profile.
++#pragma once
++
++#include "cv_hw.h"
++
++#include <driver/gpio.h>
++#include <driver/i2c_master.h>
++
++class AudioCodec;
++class Camera;
++class Display;
++class CvEyesDisplay;
++
++namespace cv {
++
++inline gpio_num_t PinOrNc(int pin) { return pin < 0 ? GPIO_NUM_NC : (gpio_num_t)pin; }
++
++// One I2C master bus per SDA/SCL pair (display and audio codec often share one).
++i2c_master_bus_handle_t I2cBus(int sda, int scl);
++
++// The screen. `eyes` gets the animated-eyes display when the screen is colour SPI and PSRAM is present.
++Display* CreateDisplay(const HwDisplay& d, CvEyesDisplay** eyes);
++
++// The audio codec described by the profile (never null: a silent stub when audio is "none").
++AudioCodec* CreateAudioCodec(const HwAudio& a);
++
++// Camera module on the board (ESP32-S3 only), null if none.
++Camera* CreateCamera(const HwCamera& c);
++
++// MCP tools for the eyes (skin, style, colour, emotion) and the boot task that fetches profile + skin.
++void RegisterEyeTools(CvEyesDisplay** eyes);
++void StartBootTask(CvEyesDisplay** eyes);
++
++}  // namespace cv
+diff --git a/main/boards/claudevoice-common/cv_eyes.cc b/main/boards/claudevoice-common/cv_eyes.cc
 new file mode 100644
 index 0000000..309ee78
 --- /dev/null
-+++ b/main/boards/zhengchen-1.54tft-wifi/cv_eyes.cc
++++ b/main/boards/claudevoice-common/cv_eyes.cc
 @@ -0,0 +1,716 @@
 +#include "cv_eyes.h"
 +#include "cv_font.h"
@@ -824,11 +1244,11 @@ index 0000000..309ee78
 +}
 +
 +}  // namespace cv
-diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_eyes.h b/main/boards/zhengchen-1.54tft-wifi/cv_eyes.h
+diff --git a/main/boards/claudevoice-common/cv_eyes.h b/main/boards/claudevoice-common/cv_eyes.h
 new file mode 100644
 index 0000000..4ce4ef5
 --- /dev/null
-+++ b/main/boards/zhengchen-1.54tft-wifi/cv_eyes.h
++++ b/main/boards/claudevoice-common/cv_eyes.h
 @@ -0,0 +1,153 @@
 +// CRT phosphor robot-eyes engine (port of proto/eyes_engine.js). No LVGL dependency.
 +#pragma once
@@ -983,11 +1403,11 @@ index 0000000..4ce4ef5
 +};
 +
 +}  // namespace cv
-diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_eyes_display.h b/main/boards/zhengchen-1.54tft-wifi/cv_eyes_display.h
+diff --git a/main/boards/claudevoice-common/cv_eyes_display.h b/main/boards/claudevoice-common/cv_eyes_display.h
 new file mode 100644
 index 0000000..0bf88f2
 --- /dev/null
-+++ b/main/boards/zhengchen-1.54tft-wifi/cv_eyes_display.h
++++ b/main/boards/claudevoice-common/cv_eyes_display.h
 @@ -0,0 +1,326 @@
 +// Full-screen CRT robot eyes on top of the stock LCD UI.
 +#pragma once
@@ -1315,11 +1735,11 @@ index 0000000..0bf88f2
 +        }
 +    }
 +};
-diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_font.h b/main/boards/zhengchen-1.54tft-wifi/cv_font.h
+diff --git a/main/boards/claudevoice-common/cv_font.h b/main/boards/claudevoice-common/cv_font.h
 new file mode 100644
 index 0000000..cca55de
 --- /dev/null
-+++ b/main/boards/zhengchen-1.54tft-wifi/cv_font.h
++++ b/main/boards/claudevoice-common/cv_font.h
 @@ -0,0 +1,182 @@
 +// Generated by tools/gen_font.py from Consolas 12px. Do not edit.
 +#pragma once
@@ -1503,17 +1923,161 @@ index 0000000..cca55de
 +    {0x00, 0x7e, 0x42, 0x5a, 0x4a, 0x4a, 0x52, 0x42, 0x7e, 0x00, 0x00, 0x00},
 +    {0x00, 0x7e, 0x42, 0x5a, 0x4a, 0x4a, 0x52, 0x42, 0x7e, 0x00, 0x00, 0x00},
 +};
-diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_hw.cc b/main/boards/zhengchen-1.54tft-wifi/cv_hw.cc
+diff --git a/main/boards/claudevoice-common/cv_generic_board.h b/main/boards/claudevoice-common/cv_generic_board.h
 new file mode 100644
-index 0000000..6678657
+index 0000000..fc0bd6a
 --- /dev/null
-+++ b/main/boards/zhengchen-1.54tft-wifi/cv_hw.cc
-@@ -0,0 +1,238 @@
++++ b/main/boards/claudevoice-common/cv_generic_board.h
+@@ -0,0 +1,137 @@
++// The universal ClaudeVoice board: display, audio codec, buttons, inputs, outputs and camera all come
++// from the hardware profile (cv_hw.h). Used by claudevoice-s3 and claudevoice-c3; their config.h only
++// gives the factory profile (CV_DEFAULT_PROFILE) and the safe-mode button.
++#pragma once
++
++#include "application.h"
++#include "assets/lang_config.h"
++#include "button.h"
++#include "config.h"
++#include "cv_board_util.h"
++#include "cv_eyes_display.h"
++#include "cv_hw.h"
++#include "cv_io.h"
++#include "display/display.h"
++#include "led/single_led.h"
++#include "power_save_timer.h"
++#include "wifi_board.h"
++
++#include <esp_log.h>
++
++#include <algorithm>
++
++class CvGenericBoard : public WifiBoard {
++private:
++    Button boot_button_;
++    Button volume_up_button_;
++    Button volume_down_button_;
++    Display* display_ = nullptr;
++    CvEyesDisplay* eyes_ = nullptr;
++    AudioCodec* codec_ = nullptr;
++    PowerSaveTimer* power_save_timer_ = nullptr;
++
++    void InitializePower() {
++        const auto& hw = cv::Hw();
++        if (hw.power_latch >= 0) {   // boards that cut their own battery power unless a pin is held high
++            gpio_config_t io = {};
++            io.pin_bit_mask = 1ULL << hw.power_latch;
++            io.mode = GPIO_MODE_OUTPUT;
++            gpio_config(&io);
++            gpio_set_level((gpio_num_t)hw.power_latch, 1);
++            gpio_hold_en((gpio_num_t)hw.power_latch);
++        }
++        power_save_timer_ = new PowerSaveTimer(-1, 60, 300);
++        power_save_timer_->OnEnterSleepMode([this]() {
++            GetDisplay()->SetPowerSaveMode(true);
++            if (GetBacklight()) GetBacklight()->SetBrightness(1);
++        });
++        power_save_timer_->OnExitSleepMode([this]() {
++            GetDisplay()->SetPowerSaveMode(false);
++            if (GetBacklight()) GetBacklight()->RestoreBrightness();
++        });
++        power_save_timer_->SetEnabled(true);
++    }
++
++    void ChangeVolume(int delta) {
++        power_save_timer_->WakeUp();
++        auto codec = GetAudioCodec();
++        int v = std::clamp(codec->output_volume() + delta, 0, 100);
++        codec->SetOutputVolume(v);
++        GetDisplay()->ShowNotification(Lang::Strings::VOLUME + std::to_string(v / 10));
++    }
++
++    void InitializeButtons() {
++        boot_button_.OnClick([this]() {
++            power_save_timer_->WakeUp();
++            auto& app = Application::GetInstance();
++            if (app.GetDeviceState() == kDeviceStateStarting) {
++                EnterWifiConfigMode();
++                return;
++            }
++            app.ToggleChatState();
++        });
++        boot_button_.OnLongPress([this]() {
++            power_save_timer_->WakeUp();
++            Application::GetInstance().SetDeviceState(kDeviceStateWifiConfiguring);
++            EnterWifiConfigMode();
++        });
++        volume_up_button_.OnClick([this]() { ChangeVolume(10); });
++        volume_up_button_.OnLongPress([this]() {
++            GetAudioCodec()->SetOutputVolume(100);
++            GetDisplay()->ShowNotification(Lang::Strings::MAX_VOLUME);
++        });
++        volume_down_button_.OnClick([this]() { ChangeVolume(-10); });
++        volume_down_button_.OnLongPress([this]() {
++            GetAudioCodec()->SetOutputVolume(0);
++            GetDisplay()->ShowNotification(Lang::Strings::MUTED);
++        });
++    }
++
++public:
++    CvGenericBoard()
++        : boot_button_(cv::PinOrNc(cv::Hw().btn_boot)),
++          volume_up_button_(cv::PinOrNc(cv::Hw().btn_vol_up)),
++          volume_down_button_(cv::PinOrNc(cv::Hw().btn_vol_down)) {
++        InitializePower();
++        InitializeButtons();
++        display_ = cv::CreateDisplay(cv::Hw().display, &eyes_);
++        cv::InitIo(display_, eyes_);
++        cv::RegisterEyeTools(&eyes_);
++        cv::StartBootTask(&eyes_);
++        if (GetBacklight()) GetBacklight()->RestoreBrightness();
++    }
++
++    AudioCodec* GetAudioCodec() override {
++        if (!codec_) codec_ = cv::CreateAudioCodec(cv::Hw().audio);
++        return codec_;
++    }
++
++    Display* GetDisplay() override { return display_; }
++
++    Backlight* GetBacklight() override {
++        const auto& d = cv::Hw().display;
++        if (d.bl < 0 || d.IsOled() || d.driver == "none") return nullptr;
++        static PwmBacklight backlight(cv::PinOrNc(d.bl), d.bl_invert);
++        return &backlight;
++    }
++
++    Led* GetLed() override {
++        static Led* led = cv::Hw().led >= 0 ? (Led*)new SingleLed(cv::PinOrNc(cv::Hw().led)) : nullptr;
++        return led ? led : WifiBoard::GetLed();
++    }
++
++    Camera* GetCamera() override {
++        static Camera* camera = nullptr;
++        static bool tried = false;
++        if (!tried) {
++            tried = true;
++            camera = cv::CreateCamera(cv::Hw().camera);
++        }
++        return camera;
++    }
++
++    void SetPowerSaveLevel(PowerSaveLevel level) override {
++        if (level != PowerSaveLevel::LOW_POWER) power_save_timer_->WakeUp();
++        WifiBoard::SetPowerSaveLevel(level);
++    }
++};
+diff --git a/main/boards/claudevoice-common/cv_hw.cc b/main/boards/claudevoice-common/cv_hw.cc
+new file mode 100644
+index 0000000..9351e12
+--- /dev/null
++++ b/main/boards/claudevoice-common/cv_hw.cc
+@@ -0,0 +1,296 @@
 +#include "cv_hw.h"
 +
 +#include "board.h"
 +#include "config.h"
 +#include "settings.h"
++#include "system_info.h"
 +
 +#include <cJSON.h>
 +#include <driver/gpio.h>
@@ -1526,6 +2090,13 @@ index 0000000..6678657
 +#include <mutex>
 +
 +#define TAG "CvHw"
++
++#ifndef CV_DEFAULT_PROFILE
++#define CV_DEFAULT_PROFILE "{}"
++#endif
++#ifndef CV_SAFE_MODE_GPIO
++#define CV_SAFE_MODE_GPIO GPIO_NUM_NC
++#endif
 +
 +namespace cv {
 +namespace {
@@ -1547,17 +2118,10 @@ index 0000000..6678657
 +    return cJSON_IsString(v) ? std::string(v->valuestring) : def;
 +}
 +
-+HwConfig Defaults() {
-+    HwConfig hw;   // struct defaults = this board (config.h)
-+    hw.inputs = {{11, true, "Left antenna", 4, "affection", "affection", "affection"},
-+                 {12, true, "Right antenna", 4, "affection", "affection", "affection"}};
-+    return hw;
-+}
-+
-+bool Parse(const std::string& json, HwConfig& hw) {
++// Applies the JSON on top of `hw` (missing keys keep their current values).
++bool ParseInto(const std::string& json, HwConfig& hw) {
 +    cJSON* root = cJSON_Parse(json.c_str());
 +    if (!root) return false;
-+    hw = Defaults();
 +    if (auto* d = cJSON_GetObjectItem(root, "display"); cJSON_IsObject(d)) {
 +        auto& x = hw.display;
 +        x.driver = Str(d, "driver", x.driver);
@@ -1569,7 +2133,7 @@ index 0000000..6678657
 +        x.mirror_y = Bool(d, "mirror_y", x.mirror_y);
 +        x.swap_xy = Bool(d, "swap_xy", x.swap_xy);
 +        x.invert = Bool(d, "invert", x.invert);
-+        x.bgr = Str(d, "rgb_order", "rgb") == "bgr";
++        x.bgr = Str(d, "rgb_order", x.bgr ? "bgr" : "rgb") == "bgr";
 +        x.bl_invert = Bool(d, "bl_invert", x.bl_invert);
 +        x.spi_mode = Int(d, "spi_mode", x.spi_mode);
 +        x.pclk_mhz = Int(d, "pclk_mhz", x.pclk_mhz);
@@ -1581,9 +2145,17 @@ index 0000000..6678657
 +        }
 +    }
 +    if (auto* a = cJSON_GetObjectItem(root, "audio"); cJSON_IsObject(a)) {
-+        hw.mic_ws = Int(a, "mic_ws", hw.mic_ws); hw.mic_sck = Int(a, "mic_sck", hw.mic_sck);
-+        hw.mic_din = Int(a, "mic_din", hw.mic_din); hw.spk_dout = Int(a, "spk_dout", hw.spk_dout);
-+        hw.spk_bclk = Int(a, "spk_bclk", hw.spk_bclk); hw.spk_lrck = Int(a, "spk_lrck", hw.spk_lrck);
++        auto& x = hw.audio;
++        x.codec = Str(a, "codec", x.codec);
++        x.in_rate = Int(a, "in_rate", x.in_rate); x.out_rate = Int(a, "out_rate", x.out_rate);
++        x.mic_ws = Int(a, "mic_ws", x.mic_ws); x.mic_sck = Int(a, "mic_sck", x.mic_sck);
++        x.mic_din = Int(a, "mic_din", x.mic_din); x.spk_dout = Int(a, "spk_dout", x.spk_dout);
++        x.spk_bclk = Int(a, "spk_bclk", x.spk_bclk); x.spk_lrck = Int(a, "spk_lrck", x.spk_lrck);
++        x.mclk = Int(a, "mclk", x.mclk); x.bclk = Int(a, "bclk", x.bclk); x.ws = Int(a, "ws", x.ws);
++        x.dout = Int(a, "dout", x.dout); x.din = Int(a, "din", x.din); x.pa = Int(a, "pa", x.pa);
++        x.i2c_sda = Int(a, "i2c_sda", x.i2c_sda); x.i2c_scl = Int(a, "i2c_scl", x.i2c_scl);
++        x.es8311_addr = Int(a, "es8311_addr", x.es8311_addr); x.es7210_addr = Int(a, "es7210_addr", x.es7210_addr);
++        x.pa_inverted = Bool(a, "pa_inverted", x.pa_inverted); x.use_mclk = Bool(a, "use_mclk", x.use_mclk);
 +    }
 +    if (auto* b = cJSON_GetObjectItem(root, "buttons"); cJSON_IsObject(b)) {
 +        hw.btn_boot = Int(b, "boot", hw.btn_boot);
@@ -1593,6 +2165,7 @@ index 0000000..6678657
 +    if (auto* p = cJSON_GetObjectItem(root, "power"); cJSON_IsObject(p)) {
 +        hw.power_latch = Int(p, "latch", hw.power_latch);
 +        hw.charge_detect = Int(p, "charge_detect", hw.charge_detect);
++        hw.led = Int(p, "led", hw.led);
 +    }
 +    if (auto* arr = cJSON_GetObjectItem(root, "inputs"); cJSON_IsArray(arr)) {
 +        hw.inputs.clear();
@@ -1610,6 +2183,7 @@ index 0000000..6678657
 +        }
 +    }
 +    if (auto* arr = cJSON_GetObjectItem(root, "outputs"); cJSON_IsArray(arr)) {
++        hw.outputs.clear();
 +        cJSON* it;
 +        cJSON_ArrayForEach(it, arr) {
 +            HwOutput o{Int(it, "pin", -1), Str(it, "type", "led"), Str(it, "name", "output"),
@@ -1618,37 +2192,55 @@ index 0000000..6678657
 +        }
 +    }
 +    if (auto* c = cJSON_GetObjectItem(root, "camera"); cJSON_IsObject(c)) {
-+        hw.camera.type = Str(c, "type", "none");
++        hw.camera.type = Str(c, "type", hw.camera.type);
 +        if (auto* p = cJSON_GetObjectItem(c, "pins"); cJSON_IsObject(p)) {
 +            static const char* kD[] = {"d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7"};
-+            for (int i = 0; i < 8; i++) hw.camera.d[i] = Int(p, kD[i], -1);
-+            hw.camera.xclk = Int(p, "xclk", -1); hw.camera.pclk = Int(p, "pclk", -1);
-+            hw.camera.vsync = Int(p, "vsync", -1); hw.camera.href = Int(p, "href", -1);
-+            hw.camera.sda = Int(p, "sda", -1); hw.camera.scl = Int(p, "scl", -1);
-+            hw.camera.pwdn = Int(p, "pwdn", -1); hw.camera.reset = Int(p, "reset", -1);
++            for (int i = 0; i < 8; i++) hw.camera.d[i] = Int(p, kD[i], hw.camera.d[i]);
++            hw.camera.xclk = Int(p, "xclk", hw.camera.xclk); hw.camera.pclk = Int(p, "pclk", hw.camera.pclk);
++            hw.camera.vsync = Int(p, "vsync", hw.camera.vsync); hw.camera.href = Int(p, "href", hw.camera.href);
++            hw.camera.sda = Int(p, "sda", hw.camera.sda); hw.camera.scl = Int(p, "scl", hw.camera.scl);
++            hw.camera.pwdn = Int(p, "pwdn", hw.camera.pwdn); hw.camera.reset = Int(p, "reset", hw.camera.reset);
 +        }
 +    }
 +    cJSON_Delete(root);
++    return true;
++}
++
++HwConfig Defaults() {
++    HwConfig hw;
++    if (!ParseInto(CV_DEFAULT_PROFILE, hw)) ESP_LOGE(TAG, "CV_DEFAULT_PROFILE in config.h is not valid JSON");
++    hw.from_defaults = true;
++    return hw;
++}
++
++bool Parse(const std::string& json, HwConfig& hw) {
++    hw = Defaults();
++    if (!ParseInto(json, hw)) return false;
 +    hw.from_defaults = false;
 +    return true;
 +}
 +
 +// Everything except input actions needs a restart to take effect.
 +std::string RebootKey(const HwConfig& h) {
-+    char buf[512];
++    char buf[640];
 +    const auto& d = h.display;
-+    snprintf(buf, sizeof(buf), "%s|%d|%d|%d|%d|%d%d%d%d%d%d|%d|%d|%d|%d,%d,%d,%d,%d,%d,%d,%d|%d,%d,%d,%d,%d,%d|%d,%d,%d|%d,%d|%s",
++    const auto& a = h.audio;
++    snprintf(buf, sizeof(buf),
++             "%s|%d|%d|%d|%d|%d%d%d%d%d%d|%d|%d|%d|%d,%d,%d,%d,%d,%d,%d,%d|%s|%d|%d|%d,%d,%d,%d,%d,%d|%d,%d,%d,%d,%d|%d,%d,%d,%d,%d,%d%d|%d,%d,%d|%d,%d,%d|%s",
 +             d.driver.c_str(), d.width, d.height, d.offset_x, d.offset_y, d.mirror_x, d.mirror_y, d.swap_xy, d.invert,
 +             d.bgr, d.bl_invert, d.spi_mode, d.pclk_mhz, d.i2c_addr, d.mosi, d.sclk, d.cs, d.dc, d.rst, d.bl, d.sda,
-+             d.scl, h.mic_ws, h.mic_sck, h.mic_din, h.spk_dout, h.spk_bclk, h.spk_lrck, h.btn_boot, h.btn_vol_up,
-+             h.btn_vol_down, h.power_latch, h.charge_detect, h.camera.type.c_str());
++             d.scl, a.codec.c_str(), a.in_rate, a.out_rate, a.mic_ws, a.mic_sck, a.mic_din, a.spk_dout, a.spk_bclk,
++             a.spk_lrck, a.mclk, a.bclk, a.ws, a.dout, a.din, a.pa, a.i2c_sda, a.i2c_scl, a.es8311_addr,
++             a.es7210_addr, a.pa_inverted, a.use_mclk, h.btn_boot, h.btn_vol_up, h.btn_vol_down, h.power_latch,
++             h.charge_detect, h.led, h.camera.type.c_str());
 +    std::string k = buf;
 +    for (auto& i : h.inputs) k += "|i" + std::to_string(i.pin) + (i.touch ? "t" : "b") + std::to_string(i.sensitivity);
 +    for (auto& o : h.outputs) k += "|o" + std::to_string(o.pin) + o.type + (o.active_low ? "L" : "H");
 +    if (h.camera.type == "board") {
 +        for (int v : h.camera.d) k += "," + std::to_string(v);
 +        k += "," + std::to_string(h.camera.xclk) + "," + std::to_string(h.camera.pclk) + "," +
-+             std::to_string(h.camera.vsync) + "," + std::to_string(h.camera.href);
++             std::to_string(h.camera.vsync) + "," + std::to_string(h.camera.href) + "," +
++             std::to_string(h.camera.sda) + "," + std::to_string(h.camera.scl);
 +    }
 +    return k;
 +}
@@ -1665,27 +2257,32 @@ index 0000000..6678657
 +    if (!g_loaded) {
 +        g_loaded = true;
 +        g_hw = Defaults();
-+        // Safety: VOLUME- held at power-on ignores a broken profile (e.g. wrong display pins).
-+        gpio_config_t io = {};
-+        io.pin_bit_mask = 1ULL << VOLUME_DOWN_BUTTON_GPIO;
-+        io.mode = GPIO_MODE_INPUT;
-+        io.pull_up_en = GPIO_PULLUP_ENABLE;
-+        gpio_config(&io);
-+        vTaskDelay(pdMS_TO_TICKS(5));
-+        if (gpio_get_level(VOLUME_DOWN_BUTTON_GPIO) == 0) {
-+            ESP_LOGW(TAG, "VOLUME- held at boot: using the built-in hardware defaults");
++        bool safe = false;
++        const int safe_pin = (int)CV_SAFE_MODE_GPIO;
++        if (safe_pin >= 0) {   // safety: this button held at power-on ignores a broken profile
++            gpio_config_t io = {};
++            io.pin_bit_mask = 1ULL << safe_pin;
++            io.mode = GPIO_MODE_INPUT;
++            io.pull_up_en = GPIO_PULLUP_ENABLE;
++            gpio_config(&io);
++            vTaskDelay(pdMS_TO_TICKS(5));
++            safe = gpio_get_level((gpio_num_t)safe_pin) == 0;
++            gpio_reset_pin((gpio_num_t)safe_pin);
++        }
++        if (safe) {
++            ESP_LOGW(TAG, "safe-mode button held at boot: using the factory hardware profile");
 +        } else {
 +            Settings settings("cvhw", false);
 +            std::string json = settings.GetString("json");
 +            if (!json.empty() && !Parse(json, g_hw)) {
-+                ESP_LOGE(TAG, "stored hardware profile is invalid, using defaults");
++                ESP_LOGE(TAG, "stored hardware profile is invalid, using the factory profile");
 +                g_hw = Defaults();
 +            }
 +        }
-+        gpio_reset_pin(VOLUME_DOWN_BUTTON_GPIO);
-+        ESP_LOGI(TAG, "hardware: display %s %dx%d, %d inputs, %d outputs, camera %s (%s)",
-+                 g_hw.display.driver.c_str(), g_hw.display.width, g_hw.display.height, (int)g_hw.inputs.size(),
-+                 (int)g_hw.outputs.size(), g_hw.camera.type.c_str(), g_hw.from_defaults ? "defaults" : "profile");
++        ESP_LOGI(TAG, "hardware: display %s %dx%d, audio %s, %d inputs, %d outputs, camera %s (%s)",
++                 g_hw.display.driver.c_str(), g_hw.display.width, g_hw.display.height, g_hw.audio.codec.c_str(),
++                 (int)g_hw.inputs.size(), (int)g_hw.outputs.size(), g_hw.camera.type.c_str(),
++                 g_hw.from_defaults ? "factory" : "profile");
 +    }
 +    return g_hw;
 +}
@@ -1700,6 +2297,24 @@ index 0000000..6678657
 +    return g_hw.inputs;
 +}
 +
++bool HwPinTaken(int pin) {
++    if (pin < 0) return false;
++    const auto& h = Hw();
++    const auto& d = h.display;
++    const auto& a = h.audio;
++    const int fixed[] = {d.mosi, d.sclk, d.cs, d.dc, d.rst, d.bl, d.sda, d.scl, a.mic_ws, a.mic_sck, a.mic_din,
++                         a.spk_dout, a.spk_bclk, a.spk_lrck, a.mclk, a.bclk, a.ws, a.dout, a.din, a.pa, a.i2c_sda,
++                         a.i2c_scl, h.btn_boot, h.btn_vol_up, h.btn_vol_down, h.power_latch, h.charge_detect, h.led};
++    for (int p : fixed) if (p == pin) return true;
++    if (h.camera.type == "board") {
++        for (int p : h.camera.d) if (p == pin) return true;
++        const int cam[] = {h.camera.xclk, h.camera.pclk, h.camera.vsync, h.camera.href, h.camera.sda, h.camera.scl,
++                           h.camera.pwdn, h.camera.reset};
++        for (int p : cam) if (p == pin) return true;
++    }
++    return false;
++}
++
 +std::string HwDefaultUrl() {
 +    Settings settings("wifi", false);
 +    std::string url = settings.GetString("ota_url");
@@ -1711,8 +2326,14 @@ index 0000000..6678657
 +std::string HwReload(const std::string& url_in) {
 +    std::string url = url_in.empty() ? HwDefaultUrl() : url_in;
 +    auto network = Board::GetInstance().GetNetwork();
++    if (!network) return "no network";
 +    auto http = network->CreateHttp(0);
++    http->SetHeader("Device-Id", SystemInfo::GetMacAddress());   // the server keeps one profile per device
 +    if (!http->Open("GET", url)) return "cannot open " + url;
++    if (http->GetStatusCode() == 404) {
++        http->Close();
++        return "no profile for this device on the server: keeping the stored one";
++    }
 +    if (http->GetStatusCode() != 200) {
 +        int code = http->GetStatusCode();
 +        http->Close();
@@ -1747,15 +2368,16 @@ index 0000000..6678657
 +}
 +
 +}  // namespace cv
-diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_hw.h b/main/boards/zhengchen-1.54tft-wifi/cv_hw.h
+diff --git a/main/boards/claudevoice-common/cv_hw.h b/main/boards/claudevoice-common/cv_hw.h
 new file mode 100644
-index 0000000..cee2941
+index 0000000..d46260d
 --- /dev/null
-+++ b/main/boards/zhengchen-1.54tft-wifi/cv_hw.h
-@@ -0,0 +1,66 @@
-+// Hardware profile: display, pins, inputs (antennae/buttons) and their actions, outputs, camera.
-+// Edited in the ClaudeVoice app, downloaded from <server>/device/hardware.json, kept in NVS ("cvhw").
-+// Defaults are this board's wiring (config.h). Hold VOLUME- while powering on to boot with defaults.
++++ b/main/boards/claudevoice-common/cv_hw.h
+@@ -0,0 +1,81 @@
++// Hardware profile: display, audio codec, pins, inputs (antennae/buttons) and their actions, outputs, camera.
++// Edited in the ClaudeVoice app, downloaded from <server>/device/hardware.json, kept in NVS ("cvhw"/"json").
++// The board's config.h gives the factory profile (CV_DEFAULT_PROFILE, JSON) and the safe-mode button
++// (CV_SAFE_MODE_GPIO): hold it while powering on to boot with the factory profile.
 +#pragma once
 +
 +#include <string>
@@ -1764,12 +2386,23 @@ index 0000000..cee2941
 +namespace cv {
 +
 +struct HwDisplay {
-+    std::string driver = "st7789";   // st7789 gc9a01 ili9341 st7796 ssd1306 sh1106 none
++    std::string driver = "none";     // st7789 gc9a01 ili9341 st7796 ssd1306 sh1106 none
 +    int width = 240, height = 240, offset_x = 0, offset_y = 0;
 +    bool mirror_x = false, mirror_y = false, swap_xy = false, invert = true, bgr = false, bl_invert = false;
-+    int spi_mode = 3, pclk_mhz = 80, i2c_addr = 0x3C;
-+    int mosi = 41, sclk = 42, cs = 21, dc = 40, rst = 45, bl = 20, sda = -1, scl = -1;
++    int spi_mode = 0, pclk_mhz = 40, i2c_addr = 0x3C;
++    int mosi = -1, sclk = -1, cs = -1, dc = -1, rst = -1, bl = -1, sda = -1, scl = -1;
 +    bool IsOled() const { return driver == "ssd1306" || driver == "sh1106"; }
++};
++
++struct HwAudio {
++    // none | i2s_simplex (separate I2S mic + amp, e.g. INMP441 + MAX98357) | i2s_duplex (one I2S bus)
++    // | es8311 (codec over I2C+I2S) | box (ES8311 out + ES7210 mic array)
++    std::string codec = "none";
++    int in_rate = 16000, out_rate = 24000;
++    int mic_ws = -1, mic_sck = -1, mic_din = -1, spk_dout = -1, spk_bclk = -1, spk_lrck = -1;   // simplex
++    int mclk = -1, bclk = -1, ws = -1, dout = -1, din = -1;                                     // duplex / codecs
++    int pa = -1, i2c_sda = -1, i2c_scl = -1, es8311_addr = 0x30, es7210_addr = 0x80;
++    bool pa_inverted = false, use_mclk = true;
 +};
 +
 +struct HwInput {
@@ -1795,9 +2428,9 @@ index 0000000..cee2941
 +
 +struct HwConfig {
 +    HwDisplay display;
-+    int mic_ws = 4, mic_sck = 5, mic_din = 6, spk_dout = 7, spk_bclk = 15, spk_lrck = 16;
-+    int btn_boot = 0, btn_vol_up = 10, btn_vol_down = 39;
-+    int power_latch = 2, charge_detect = 9;
++    HwAudio audio;
++    int btn_boot = 0, btn_vol_up = -1, btn_vol_down = -1;
++    int power_latch = -1, charge_detect = -1, led = -1;
 +    std::vector<HwInput> inputs;
 +    std::vector<HwOutput> outputs;
 +    HwCamera camera;
@@ -1814,17 +2447,20 @@ index 0000000..cee2941
 +// Profile URL next to the OTA URL: http://<server>/device/hardware.json
 +std::string HwDefaultUrl();
 +
-+// Updates input actions in RAM (used by HwReload and the assistant's tool).
++// Updates input actions in RAM (used by HwReload).
 +void HwSetInputs(const std::vector<HwInput>& inputs);
 +std::vector<HwInput> HwInputsSnapshot();
 +
++// True if the pin is used by the profile's fixed wiring (display, audio, buttons, power, camera).
++bool HwPinTaken(int pin);
++
 +}  // namespace cv
-diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_io.cc b/main/boards/zhengchen-1.54tft-wifi/cv_io.cc
+diff --git a/main/boards/claudevoice-common/cv_io.cc b/main/boards/claudevoice-common/cv_io.cc
 new file mode 100644
-index 0000000..fc15fca
+index 0000000..750cddf
 --- /dev/null
-+++ b/main/boards/zhengchen-1.54tft-wifi/cv_io.cc
-@@ -0,0 +1,586 @@
++++ b/main/boards/claudevoice-common/cv_io.cc
+@@ -0,0 +1,640 @@
 +#include "cv_io.h"
 +#include "cv_eyes_display.h"
 +#include "mcp_server.h"
@@ -1839,10 +2475,17 @@ index 0000000..fc15fca
 +
 +#include <driver/gpio.h>
 +#include <driver/ledc.h>
++#include <soc/soc_caps.h>
++#if SOC_TOUCH_SENSOR_SUPPORTED && SOC_TOUCH_SENSOR_VERSION >= 2
 +#include <driver/touch_sens.h>
++#define CV_HAS_TOUCH 1
++#else
++#define CV_HAS_TOUCH 0
++#endif
 +#include <esp_adc/adc_oneshot.h>
 +#include <esp_log.h>
 +#include <esp_timer.h>
++#include <esp_heap_caps.h>
 +#include <freertos/FreeRTOS.h>
 +#include <freertos/task.h>
 +
@@ -1863,7 +2506,32 @@ index 0000000..fc15fca
 +// ---------------- pins ----------------
 +enum class Mode { Free, Out, In, Pwm, Servo, Antenna };
 +struct PinState { int pin; Mode mode; int channel; };
-+PinState g_pins[sizeof(kUserPins) / sizeof(int)];
++std::vector<PinState> g_pins;
++
++// GPIOs that are never offered: flash / PSRAM / USB lines of the chip.
++bool ReservedPin(int pin) {
++#if CONFIG_IDF_TARGET_ESP32S3
++    // 26-32: SPI flash; 33-37: octal PSRAM (free on modules with quad PSRAM or none); 19/20: USB
++#ifdef CONFIG_SPIRAM_MODE_OCT
++    const bool octal_psram = heap_caps_get_total_size(MALLOC_CAP_SPIRAM) > 0;
++#else
++    const bool octal_psram = false;
++#endif
++    return (pin >= 26 && pin <= 32) || (octal_psram && pin >= 33 && pin <= 37) || pin == 19 || pin == 20;
++#elif CONFIG_IDF_TARGET_ESP32C3
++    return pin == 18 || pin == 19;   // USB; GPIO12-17 belong to external flash only on chips without in-package flash
++#else
++    return false;
++#endif
++}
++
++void BuildUserPins() {
++    g_pins.clear();
++    for (int pin = 0; pin < SOC_GPIO_PIN_COUNT; pin++) {
++        if (!GPIO_IS_VALID_OUTPUT_GPIO(pin) || ReservedPin(pin) || HwPinTaken(pin)) continue;
++        g_pins.push_back({pin, Mode::Free, -1});
++    }
++}
 +bool g_servo_timer = false;
 +bool g_pwm_timer = false;
 +uint32_t g_pwm_freq = 0;
@@ -1877,9 +2545,8 @@ index 0000000..fc15fca
 +std::string PinError(int pin) {
 +    if (pin == 2) return "GPIO2 is the board's power latch: driving it switches the device off. Use another pin.";
 +    std::string s = "GPIO" + std::to_string(pin) + " is not available. Free pins:";
-+    for (int p : kUserPins) {
-+        auto* st = Find(p);
-+        if (st && st->mode != Mode::Antenna) s += " " + std::to_string(p);
++    for (auto& st : g_pins) {
++        if (st.mode != Mode::Antenna) s += " " + std::to_string(st.pin);
 +    }
 +    return s;
 +}
@@ -2003,7 +2670,10 @@ index 0000000..fc15fca
 +ReturnValue AnalogRead(int pin) {
 +    std::lock_guard<std::mutex> lock(g_mu);
 +    PinState* p = Claim(pin);
-+    if (pin < 1 || pin > 10) throw std::runtime_error("Analog input works on GPIO1 and GPIO3 only (ADC1).");
++    adc_unit_t unit;
++    adc_channel_t channel;
++    if (adc_oneshot_io_to_channel(pin, &unit, &channel) != ESP_OK || unit != ADC_UNIT_1)
++        throw std::runtime_error("GPIO" + std::to_string(pin) + " has no ADC1 channel on this chip.");
 +    if (!g_adc) {
 +        adc_oneshot_unit_init_cfg_t u = {};
 +        u.unit_id = ADC_UNIT_1;
@@ -2013,9 +2683,9 @@ index 0000000..fc15fca
 +    adc_oneshot_chan_cfg_t c = {};
 +    c.atten = ADC_ATTEN_DB_12;
 +    c.bitwidth = ADC_BITWIDTH_12;
-+    ESP_ERROR_CHECK(adc_oneshot_config_channel(g_adc, (adc_channel_t)(pin - 1), &c));
++    ESP_ERROR_CHECK(adc_oneshot_config_channel(g_adc, channel, &c));
 +    int raw = 0;
-+    ESP_ERROR_CHECK(adc_oneshot_read(g_adc, (adc_channel_t)(pin - 1), &raw));
++    ESP_ERROR_CHECK(adc_oneshot_read(g_adc, channel, &raw));
 +    p->mode = Mode::In;
 +    char buf[96];
 +    snprintf(buf, sizeof(buf), "{\"raw\":%d,\"max\":4095,\"approx_volts\":%.2f}", raw, raw * 3.1f / 4095.0f);
@@ -2026,11 +2696,11 @@ index 0000000..fc15fca
 +    std::lock_guard<std::mutex> lock(g_mu);
 +    static const char* kModes[] = {"free", "output", "input", "pwm", "servo", "antenna"};
 +    std::string s = "{\"pins\":[";
-+    for (size_t i = 0; i < sizeof(g_pins) / sizeof(g_pins[0]); i++) {
++    for (size_t i = 0; i < g_pins.size(); i++) {
 +        if (i) s += ",";
 +        s += "{\"gpio\":" + std::to_string(g_pins[i].pin) + ",\"mode\":\"" + kModes[(int)g_pins[i].mode] + "\"}";
 +    }
-+    s += "],\"note\":\"GPIO2 = power latch (never touch). Analog only on GPIO1/3. 3.3V logic, max ~20 mA per pin; "
++    s += "],\"note\":\"3.3V logic, max ~20 mA per pin; "
 +         "power servos from 5V, not from a GPIO.\"}";
 +    return s;
 +}
@@ -2044,7 +2714,9 @@ index 0000000..fc15fca
 +struct InputRt {
 +    int pin = -1;
 +    bool touch = true;
++#if CV_HAS_TOUCH
 +    touch_channel_handle_t chan = nullptr;
++#endif
 +    float base = 0;
 +    std::atomic<uint32_t> raw{0};
 +    std::atomic<bool> pressed{false};
@@ -2052,7 +2724,9 @@ index 0000000..fc15fca
 +    bool hold_fired = false, tap_pending = false;
 +};
 +
++#if CV_HAS_TOUCH
 +touch_sensor_handle_t g_touch = nullptr;
++#endif
 +InputRt g_in[kMaxInputs];
 +int g_in_count = 0;
 +std::atomic<int> g_touches{0};
@@ -2184,7 +2858,9 @@ index 0000000..fc15fca
 +    for (int i = 0; i < g_in_count; i++) {
 +        if (!g_in[i].touch) continue;
 +        uint32_t v = 0;
++#if CV_HAS_TOUCH
 +        touch_channel_read_data(g_in[i].chan, TOUCH_CHAN_DATA_TYPE_SMOOTH, &v);
++#endif
 +        g_in[i].base = v;
 +    }
 +    int64_t last_crave = esp_timer_get_time();
@@ -2198,7 +2874,11 @@ index 0000000..fc15fca
 +            bool on;
 +            if (r.touch) {
 +                uint32_t v = 0;
++#if CV_HAS_TOUCH
 +                if (touch_channel_read_data(r.chan, TOUCH_CHAN_DATA_TYPE_SMOOTH, &v) != ESP_OK) continue;
++#else
++                continue;
++#endif
 +                r.raw = v;
 +                const float k = inputs[i].sensitivity / 100.0f;
 +                on = r.pressed ? v > r.base * (1 + k * 0.5f) : v > r.base * (1 + k);
@@ -2251,6 +2931,10 @@ index 0000000..fc15fca
 +    const auto inputs = Hw().inputs;
 +    bool any_touch = false;
 +    for (auto& in : inputs) any_touch |= in.touch;
++#if !CV_HAS_TOUCH
++    if (any_touch) ESP_LOGW(TAG, "this chip has no touch sensor: touch inputs are ignored (use buttons)");
++    any_touch = false;
++#else
 +    if (any_touch) {
 +        static touch_sensor_sample_config_t sample[1] = {
 +            TOUCH_SENSOR_V2_DEFAULT_SAMPLE_CONFIG(500, TOUCH_VOLT_LIM_L_0V5, TOUCH_VOLT_LIM_H_2V2)};
@@ -2261,16 +2945,21 @@ index 0000000..fc15fca
 +    chan_cfg.active_thresh[0] = 2000;
 +    chan_cfg.charge_speed = TOUCH_CHARGE_SPEED_7;
 +    chan_cfg.init_charge_volt = TOUCH_INIT_CHARGE_VOLT_DEFAULT;
++#endif
 +    for (auto& in : inputs) {
 +        if (g_in_count >= kMaxInputs) break;
 +        auto& r = g_in[g_in_count];
 +        r.pin = in.pin;
 +        r.touch = in.touch;
 +        if (in.touch) {
++#if CV_HAS_TOUCH
 +            if (touch_sensor_new_channel(g_touch, in.pin, &chan_cfg, &r.chan) != ESP_OK) {
 +                ESP_LOGE(TAG, "GPIO%d cannot be a touch input", in.pin);
 +                continue;
 +            }
++#else
++            continue;
++#endif
 +        } else {
 +            gpio_config_t io = {};
 +            io.pin_bit_mask = 1ULL << in.pin;
@@ -2282,12 +2971,14 @@ index 0000000..fc15fca
 +        ESP_LOGI(TAG, "input '%s' on GPIO%d (%s)", in.name.c_str(), in.pin, in.touch ? "touch" : "button");
 +        g_in_count++;
 +    }
++#if CV_HAS_TOUCH
 +    if (any_touch) {
 +        touch_sensor_filter_config_t filter = TOUCH_SENSOR_DEFAULT_FILTER_CONFIG();
 +        touch_sensor_config_filter(g_touch, &filter);
 +        if (touch_sensor_enable(g_touch) != ESP_OK) return false;
 +        if (touch_sensor_start_continuous_scanning(g_touch) != ESP_OK) return false;
 +    }
++#endif
 +    for (auto& o : Hw().outputs) {
 +        gpio_config_t io = {};
 +        io.pin_bit_mask = 1ULL << o.pin;
@@ -2326,14 +3017,13 @@ index 0000000..fc15fca
 +void InitIo(Display* screen, CvEyesDisplay* eyes) {
 +    g_screen = screen;
 +    g_display = eyes;
-+    for (size_t i = 0; i < sizeof(kUserPins) / sizeof(int); i++) g_pins[i] = {kUserPins[i], Mode::Free, -1};
++    BuildUserPins();
 +    if (!InitInputs()) ESP_LOGE(TAG, "inputs init failed");
 +
 +    auto& mcp = McpServer::GetInstance();
 +    std::string pins_hint = " Free GPIOs:";
-+    for (int p : kUserPins) {
-+        auto* st = Find(p);
-+        if (st && st->mode == Mode::Free) pins_hint += " " + std::to_string(p);
++    for (auto& st : g_pins) {
++        if (st.mode == Mode::Free) pins_hint += " " + std::to_string(st.pin);
 +    }
 +    pins_hint += " (pins used by the hardware profile's inputs/outputs are excluded; GPIO2 is the power latch "
 +                 "and must never be used).";
@@ -2362,7 +3052,7 @@ index 0000000..fc15fca
 +        "Read a GPIO digital level (0/1). `pull`: none, up or down (for buttons use up)." + pins_hint,
 +        PropertyList({Property("pin", kPropertyTypeInteger), Property("pull", kPropertyTypeString, std::string("none"))}),
 +        [](const PropertyList& p) -> ReturnValue { return Read(p["pin"].value<int>(), p["pull"].value<std::string>()); });
-+    mcp.AddTool("self.gpio.analog_read", "Read an analog voltage 0-3.1 V on GPIO1 or GPIO3.",
++    mcp.AddTool("self.gpio.analog_read", "Read an analog voltage 0-3.1 V on a GPIO with an ADC1 channel.",
 +        PropertyList({Property("pin", kPropertyTypeInteger)}),
 +        [](const PropertyList& p) -> ReturnValue { return AnalogRead(p["pin"].value<int>()); });
 +    mcp.AddTool("self.gpio.release", "Stop PWM/servo/output on a GPIO and leave it floating.",
@@ -2411,12 +3101,12 @@ index 0000000..fc15fca
 +}
 +
 +}  // namespace cv
-diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_io.h b/main/boards/zhengchen-1.54tft-wifi/cv_io.h
+diff --git a/main/boards/claudevoice-common/cv_io.h b/main/boards/claudevoice-common/cv_io.h
 new file mode 100644
-index 0000000..1c991d7
+index 0000000..c11bdd6
 --- /dev/null
-+++ b/main/boards/zhengchen-1.54tft-wifi/cv_io.h
-@@ -0,0 +1,19 @@
++++ b/main/boards/claudevoice-common/cv_io.h
+@@ -0,0 +1,18 @@
 +// User-facing GPIO tools (servo, PWM, digital, analog) and the touch "antennae".
 +#pragma once
 +
@@ -2428,19 +3118,18 @@ index 0000000..1c991d7
 +
 +namespace cv {
 +
-+// Pins the user may drive. Everything else is wired to the screen, audio, buttons,
-+// battery, power latch (GPIO2), flash/PSRAM or USB/UART on this board.
-+inline constexpr int kUserPins[] = {1, 3, 11, 12, 13, 14, 17, 18, 38, 47, 48};
++// Pins the user may drive are computed at boot: every valid GPIO of the chip that is not flash/PSRAM/USB
++// and not used by the hardware profile (display, audio, buttons, power, camera).
 +
 +void InitIo(Display* screen, CvEyesDisplay* eyes);   // registers MCP tools, starts inputs/outputs (eyes may be null)
 +std::string AntennaStateJson();        // also used to brief Claude about the device's "mood"
 +
 +}  // namespace cv
-diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_skins.cc b/main/boards/zhengchen-1.54tft-wifi/cv_skins.cc
+diff --git a/main/boards/claudevoice-common/cv_skins.cc b/main/boards/claudevoice-common/cv_skins.cc
 new file mode 100644
 index 0000000..bd2036c
 --- /dev/null
-+++ b/main/boards/zhengchen-1.54tft-wifi/cv_skins.cc
++++ b/main/boards/claudevoice-common/cv_skins.cc
 @@ -0,0 +1,443 @@
 +// Extra skins for cv::Eyes (port of proto/skins_render.js). Everything is drawn as phosphor
 +// intensity into the 120x120 layer, so each skin can be recolored by its palette.
@@ -2885,6 +3574,141 @@ index 0000000..bd2036c
 +#undef PUT
 +
 +}  // namespace cv
+diff --git a/main/boards/zhengchen-1.54tft-wifi/zhengchen_lcd_display.h b/main/boards/claudevoice-common/zhengchen_lcd_display.h
+similarity index 92%
+rename from main/boards/zhengchen-1.54tft-wifi/zhengchen_lcd_display.h
+rename to main/boards/claudevoice-common/zhengchen_lcd_display.h
+index fa6222a..f07155b 100644
+--- a/main/boards/zhengchen-1.54tft-wifi/zhengchen_lcd_display.h
++++ b/main/boards/claudevoice-common/zhengchen_lcd_display.h
+@@ -15,6 +15,7 @@ public:
+     using SpiLcdDisplay::SpiLcdDisplay;
+ 
+     void SetupHighTempWarningPopup() {
++        DisplayLockGuard lock(this);  // LVGL task is already running: never touch objects unlocked
+         auto lvgl_theme = static_cast<LvglTheme*>(current_theme_);
+         auto text_font = lvgl_theme->text_font()->font();
+         // 创建高温警告弹窗
+@@ -49,12 +50,14 @@ public:
+     }
+ 
+     void ShowHighTempWarning() {
++        DisplayLockGuard lock(this);
+         if (high_temp_popup_ && lv_obj_has_flag(high_temp_popup_, LV_OBJ_FLAG_HIDDEN)) {
+             lv_obj_remove_flag(high_temp_popup_, LV_OBJ_FLAG_HIDDEN);
+         }
+     }
+ 
+     void HideHighTempWarning() {
++        DisplayLockGuard lock(this);
+         if (high_temp_popup_ && !lv_obj_has_flag(high_temp_popup_, LV_OBJ_FLAG_HIDDEN)) {
+             lv_obj_add_flag(high_temp_popup_, LV_OBJ_FLAG_HIDDEN);
+         }
+diff --git a/main/boards/claudevoice-s3/claudevoice-s3.cc b/main/boards/claudevoice-s3/claudevoice-s3.cc
+new file mode 100644
+index 0000000..571d12b
+--- /dev/null
++++ b/main/boards/claudevoice-s3/claudevoice-s3.cc
+@@ -0,0 +1,4 @@
++// ClaudeVoice universal board: everything is configured by the hardware profile (see cv_generic_board.h).
++#include "cv_generic_board.h"
++
++DECLARE_BOARD(CvGenericBoard);
+diff --git a/main/boards/claudevoice-s3/config.h b/main/boards/claudevoice-s3/config.h
+new file mode 100644
+index 0000000..52418f6
+--- /dev/null
++++ b/main/boards/claudevoice-s3/config.h
+@@ -0,0 +1,15 @@
++// ClaudeVoice universal ESP32-S3 board: the real wiring comes from the hardware profile (set by the
++// setup wizard or the app). This is only the factory profile used before one is stored.
++#ifndef _BOARD_CONFIG_H_
++#define _BOARD_CONFIG_H_
++
++#include <driver/gpio.h>
++
++#define AUDIO_INPUT_SAMPLE_RATE  16000
++#define AUDIO_OUTPUT_SAMPLE_RATE 24000
++
++// Hold BOOT right after power-on (not during it) to start with this factory profile.
++#define CV_SAFE_MODE_GPIO GPIO_NUM_0
++#define CV_DEFAULT_PROFILE "{\"buttons\":{\"boot\":0}}"
++
++#endif
+diff --git a/main/boards/claudevoice-s3/config.json b/main/boards/claudevoice-s3/config.json
+new file mode 100644
+index 0000000..4026f5a
+--- /dev/null
++++ b/main/boards/claudevoice-s3/config.json
+@@ -0,0 +1,38 @@
++{
++    "target": "esp32s3",
++    "builds": [
++        {
++            "name": "claudevoice-s3-16m",
++            "sdkconfig_append": [
++                "CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y",
++                "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/16m.csv\"",
++                "CONFIG_SPIRAM_MODE_OCT=y",
++                "CONFIG_SPIRAM_IGNORE_NOTFOUND=y",
++                "CONFIG_OTA_URL=\"http://claudevoice.local:8765/xiaozhi/ota/\"",
++                "CONFIG_LANGUAGE_RU_RU=y"
++            ]
++        },
++        {
++            "name": "claudevoice-s3-8m",
++            "sdkconfig_append": [
++                "CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y",
++                "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/8m_claudevoice.csv\"",
++                "CONFIG_SPIRAM_MODE_OCT=y",
++                "CONFIG_SPIRAM_IGNORE_NOTFOUND=y",
++                "CONFIG_OTA_URL=\"http://claudevoice.local:8765/xiaozhi/ota/\"",
++                "CONFIG_LANGUAGE_RU_RU=y"
++            ]
++        },
++        {
++            "name": "claudevoice-s3-8m-quad",
++            "sdkconfig_append": [
++                "CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y",
++                "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"partitions/v2/8m_claudevoice.csv\"",
++                "CONFIG_SPIRAM_MODE_QUAD=y",
++                "CONFIG_SPIRAM_IGNORE_NOTFOUND=y",
++                "CONFIG_OTA_URL=\"http://claudevoice.local:8765/xiaozhi/ota/\"",
++                "CONFIG_LANGUAGE_RU_RU=y"
++            ]
++        }
++    ]
++}
+diff --git a/main/boards/zhengchen-1.54tft-wifi/config.h b/main/boards/zhengchen-1.54tft-wifi/config.h
+index f7d971a..af3bfe6 100644
+--- a/main/boards/zhengchen-1.54tft-wifi/config.h
++++ b/main/boards/zhengchen-1.54tft-wifi/config.h
+@@ -36,4 +36,8 @@
+ #define DISPLAY_BACKLIGHT_OUTPUT_INVERT false
+ 
+ 
++// ClaudeVoice: factory hardware profile of this board (the app can change it), safe-mode button.
++#define CV_SAFE_MODE_GPIO VOLUME_DOWN_BUTTON_GPIO
++#define CV_DEFAULT_PROFILE "{"   "\"display\":{\"driver\":\"st7789\",\"width\":240,\"height\":240,\"invert\":true,\"spi_mode\":3,\"pclk_mhz\":80,"   "\"pins\":{\"mosi\":41,\"sclk\":42,\"cs\":21,\"dc\":40,\"rst\":45,\"bl\":20}},"   "\"audio\":{\"codec\":\"i2s_simplex\",\"in_rate\":16000,\"out_rate\":24000,\"mic_ws\":4,\"mic_sck\":5,"   "\"mic_din\":6,\"spk_dout\":7,\"spk_bclk\":15,\"spk_lrck\":16},"   "\"buttons\":{\"boot\":0,\"volume_up\":10,\"volume_down\":39},"   "\"power\":{\"latch\":2,\"charge_detect\":9},"   "\"inputs\":[{\"pin\":11,\"type\":\"touch\",\"name\":\"Left antenna\",\"tap\":\"affection\",\"double\":\"affection\",\"hold\":\"affection\"},"   "{\"pin\":12,\"type\":\"touch\",\"name\":\"Right antenna\",\"tap\":\"affection\",\"double\":\"affection\",\"hold\":\"affection\"}]}"
++
+ #endif // _BOARD_CONFIG_H_
+diff --git a/main/boards/zhengchen-1.54tft-wifi/config.json b/main/boards/zhengchen-1.54tft-wifi/config.json
+index 3c17d11..9df9692 100644
+--- a/main/boards/zhengchen-1.54tft-wifi/config.json
++++ b/main/boards/zhengchen-1.54tft-wifi/config.json
+@@ -3,7 +3,10 @@
+     "builds": [
+         {
+             "name": "zhengchen-1.54tft-wifi",
+-            "sdkconfig_append": []
++            "sdkconfig_append": [
++                "CONFIG_OTA_URL=\"http://claudevoice.local:8765/xiaozhi/ota/\"",
++                "CONFIG_LANGUAGE_RU_RU=y"
++            ]
+         }
+     ]
+ }
+\ No newline at end of file
 diff --git a/main/boards/zhengchen-1.54tft-wifi/power_manager.h b/main/boards/zhengchen-1.54tft-wifi/power_manager.h
 index de6e82d..329058c 100644
 --- a/main/boards/zhengchen-1.54tft-wifi/power_manager.h
@@ -2908,7 +3732,7 @@ index de6e82d..329058c 100644
          io_conf.pull_up_en = GPIO_PULLUP_DISABLE;     
          gpio_config(&io_conf);
 diff --git a/main/boards/zhengchen-1.54tft-wifi/zhengchen-1.54tft-wifi.cc b/main/boards/zhengchen-1.54tft-wifi/zhengchen-1.54tft-wifi.cc
-index 5f7c305..93a8abf 100644
+index 5f7c305..4cb40c2 100644
 --- a/main/boards/zhengchen-1.54tft-wifi/zhengchen-1.54tft-wifi.cc
 +++ b/main/boards/zhengchen-1.54tft-wifi/zhengchen-1.54tft-wifi.cc
 @@ -1,6 +1,6 @@
@@ -2919,7 +3743,7 @@ index 5f7c305..93a8abf 100644
  #include "system_reset.h"
  #include "application.h"
  #include "button.h"
-@@ -9,9 +9,21 @@
+@@ -9,9 +9,13 @@
  #include "led/single_led.h"
  #include "assets/lang_config.h"
  #include "power_manager.h"
@@ -2927,21 +3751,14 @@ index 5f7c305..93a8abf 100644
 +#include "cv_io.h"
 +#include "settings.h"
 +#include "cv_hw.h"
-+#include "esp32_camera.h"
-+#include "display/oled_display.h"
++#include "cv_board_util.h"
  
  #include <esp_log.h>
- #include <esp_lcd_panel_vendor.h>
-+#include <esp_lcd_panel_ssd1306.h>
-+#include <driver/i2c_master.h>
-+#include "esp_lcd_gc9a01.h"
-+#include "esp_lcd_ili9341.h"
-+#include "esp_lcd_st7796.h"
-+#include "esp_lcd_panel_sh1106.h"
+-#include <esp_lcd_panel_vendor.h>
  
  #include <driver/rtc_io.h>
  #include <esp_sleep.h>
-@@ -23,16 +35,17 @@ private:
+@@ -23,16 +27,15 @@ private:
      Button boot_button_;
      Button volume_up_button_;
      Button volume_down_button_;
@@ -2950,8 +3767,8 @@ index 5f7c305..93a8abf 100644
 +    CvEyesDisplay* eyes_ = nullptr;       // the animated eyes (colour SPI screens only)
      PowerSaveTimer* power_save_timer_;
      PowerManager* power_manager_;
-     esp_lcd_panel_io_handle_t panel_io_ = nullptr;
-     esp_lcd_panel_handle_t panel_ = nullptr;
+-    esp_lcd_panel_io_handle_t panel_io_ = nullptr;
+-    esp_lcd_panel_handle_t panel_ = nullptr;
  
      void InitializePowerManager() {
 -        power_manager_ = new PowerManager(GPIO_NUM_9);
@@ -2962,7 +3779,7 @@ index 5f7c305..93a8abf 100644
          });
  
          power_manager_->OnChargingStatusChanged([this](bool is_charging) {
-@@ -48,33 +61,25 @@ private:
+@@ -48,33 +51,25 @@ private:
      }
  
      void InitializePowerSaveTimer() {
@@ -3004,189 +3821,44 @@ index 5f7c305..93a8abf 100644
      void InitializeButtons() {
          
          boot_button_.OnClick([this]() {
-@@ -136,67 +141,233 @@ private:
+@@ -136,59 +131,37 @@ private:
          });
      }
  
 -    void InitializeSt7789Display() {
 -        ESP_LOGD(TAG, "Install panel IO");
-+    static gpio_num_t PinOrNc(int pin) { return pin < 0 ? GPIO_NUM_NC : (gpio_num_t)pin; }
-+
-+    // Builds the screen from the hardware profile (driver, resolution, pins). See cv_hw.h.
-+    void InitializeDisplay() {
-+        const auto& d = cv::Hw().display;
-+        if (d.driver == "none") {
-+            display_ = new NoDisplay();
-+            return;
-+        }
-+        if (d.IsOled()) {
-+            InitializeOled(d);
-+            return;
-+        }
-+        spi_bus_config_t buscfg = {};
-+        buscfg.mosi_io_num = PinOrNc(d.mosi);
-+        buscfg.miso_io_num = GPIO_NUM_NC;
-+        buscfg.sclk_io_num = PinOrNc(d.sclk);
-+        buscfg.quadwp_io_num = GPIO_NUM_NC;
-+        buscfg.quadhd_io_num = GPIO_NUM_NC;
-+        buscfg.max_transfer_sz = d.width * d.height * sizeof(uint16_t);
-+        ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
-+
-         esp_lcd_panel_io_spi_config_t io_config = {};
+-        esp_lcd_panel_io_spi_config_t io_config = {};
 -        io_config.cs_gpio_num = DISPLAY_CS;
 -        io_config.dc_gpio_num = DISPLAY_DC;
 -        io_config.spi_mode = 3;
 -        io_config.pclk_hz = 80 * 1000 * 1000;
-+        io_config.cs_gpio_num = PinOrNc(d.cs);
-+        io_config.dc_gpio_num = PinOrNc(d.dc);
-+        io_config.spi_mode = d.spi_mode;
-+        io_config.pclk_hz = d.pclk_mhz * 1000 * 1000;
-         io_config.trans_queue_depth = 10;
-         io_config.lcd_cmd_bits = 8;
-         io_config.lcd_param_bits = 8;
-         ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(SPI3_HOST, &io_config, &panel_io_));
- 
+-        io_config.trans_queue_depth = 10;
+-        io_config.lcd_cmd_bits = 8;
+-        io_config.lcd_param_bits = 8;
+-        ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(SPI3_HOST, &io_config, &panel_io_));
+-
 -        ESP_LOGD(TAG, "Install LCD driver");
-         esp_lcd_panel_dev_config_t panel_config = {};
+-        esp_lcd_panel_dev_config_t panel_config = {};
 -        panel_config.reset_gpio_num = DISPLAY_RES;
 -        panel_config.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB;
-+        panel_config.reset_gpio_num = PinOrNc(d.rst);
-+        panel_config.rgb_ele_order = d.bgr ? LCD_RGB_ELEMENT_ORDER_BGR : LCD_RGB_ELEMENT_ORDER_RGB;
-         panel_config.bits_per_pixel = 16;
+-        panel_config.bits_per_pixel = 16;
 -        ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(panel_io_, &panel_config, &panel_));
 -        ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_));
 -        ESP_ERROR_CHECK(esp_lcd_panel_init(panel_));
 -        ESP_ERROR_CHECK(esp_lcd_panel_swap_xy(panel_, DISPLAY_SWAP_XY));
 -        ESP_ERROR_CHECK(esp_lcd_panel_mirror(panel_, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y));
 -        ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel_, true));
-+        esp_err_t err;
-+        if (d.driver == "gc9a01") err = esp_lcd_new_panel_gc9a01(panel_io_, &panel_config, &panel_);
-+        else if (d.driver == "ili9341") err = esp_lcd_new_panel_ili9341(panel_io_, &panel_config, &panel_);
-+        else if (d.driver == "st7796") err = esp_lcd_new_panel_st7796(panel_io_, &panel_config, &panel_);
-+        else err = esp_lcd_new_panel_st7789(panel_io_, &panel_config, &panel_);
-+        if (err != ESP_OK) {
-+            ESP_LOGE(TAG, "display driver %s failed: %s", d.driver.c_str(), esp_err_to_name(err));
-+            display_ = new NoDisplay();
-+            return;
-+        }
-+        esp_lcd_panel_reset(panel_);
-+        esp_lcd_panel_init(panel_);
-+        esp_lcd_panel_swap_xy(panel_, d.swap_xy);
-+        esp_lcd_panel_mirror(panel_, d.mirror_x, d.mirror_y);
-+        esp_lcd_panel_invert_color(panel_, d.invert);
-+        esp_lcd_panel_disp_on_off(panel_, true);
-+
-+        eyes_ = new CvEyesDisplay(panel_io_, panel_, d.width, d.height, d.offset_x, d.offset_y,
-+                                  d.mirror_x, d.mirror_y, d.swap_xy);
-+        eyes_->SetupHighTempWarningPopup();
-+        display_ = eyes_;
-+    }
-+
-+    void InitializeOled(const cv::HwDisplay& d) {
-+        i2c_master_bus_handle_t bus = nullptr;
-+        i2c_master_bus_config_t bus_config = {};
-+        bus_config.i2c_port = (i2c_port_t)0;
-+        bus_config.sda_io_num = PinOrNc(d.sda);
-+        bus_config.scl_io_num = PinOrNc(d.scl);
-+        bus_config.clk_source = I2C_CLK_SRC_DEFAULT;
-+        bus_config.glitch_ignore_cnt = 7;
-+        bus_config.flags.enable_internal_pullup = 1;
-+        if (i2c_new_master_bus(&bus_config, &bus) != ESP_OK) {
-+            ESP_LOGE(TAG, "OLED I2C bus failed (SDA %d, SCL %d)", d.sda, d.scl);
-+            display_ = new NoDisplay();
-+            return;
-+        }
-+        esp_lcd_panel_io_i2c_config_t io_config = {};
-+        io_config.dev_addr = (uint32_t)d.i2c_addr;
-+        io_config.control_phase_bytes = 1;
-+        io_config.dc_bit_offset = 6;
-+        io_config.lcd_cmd_bits = 8;
-+        io_config.lcd_param_bits = 8;
-+        io_config.scl_speed_hz = 400 * 1000;
-+        ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c_v2(bus, &io_config, &panel_io_));
-+        esp_lcd_panel_dev_config_t panel_config = {};
-+        panel_config.reset_gpio_num = PinOrNc(d.rst);
-+        panel_config.bits_per_pixel = 1;
-+        esp_err_t err;
-+        esp_lcd_panel_ssd1306_config_t ssd1306_config = {};
-+        ssd1306_config.height = (uint8_t)d.height;
-+        if (d.driver == "sh1106") {
-+            err = esp_lcd_new_panel_sh1106(panel_io_, &panel_config, &panel_);
-+        } else {
-+            panel_config.vendor_config = &ssd1306_config;
-+            err = esp_lcd_new_panel_ssd1306(panel_io_, &panel_config, &panel_);
-+        }
-+        if (err != ESP_OK || esp_lcd_panel_reset(panel_) != ESP_OK || esp_lcd_panel_init(panel_) != ESP_OK) {
-+            ESP_LOGE(TAG, "OLED %s init failed", d.driver.c_str());
-+            display_ = new NoDisplay();
-+            return;
-+        }
-+        esp_lcd_panel_disp_on_off(panel_, true);
-+        display_ = new OledDisplay(panel_io_, panel_, d.width, d.height, d.mirror_x, d.mirror_y);
-+    }
-+
-+    // Skins live on the voice server next to the OTA endpoint: .../xiaozhi/ota/ -> .../skins/active.json
-+    static std::string ActiveSkinUrl() {
-+        Settings settings("wifi", false);
-+        std::string url = settings.GetString("ota_url");
-+        if (url.empty()) url = CONFIG_OTA_URL;
-+        auto p = url.find("/xiaozhi/ota");
-+        return (p == std::string::npos ? url : url.substr(0, p)) + "/skins/active.json";
-+    }
- 
+-
 -        display_ = new ZHENGCHEN_LcdDisplay(panel_io_, panel_, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, 
 -            DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
 -        display_->SetupHighTempWarningPopup();
-+    static void SkinBootTask(void* arg) {
-+        auto* self = static_cast<ZHENGCHEN_1_54TFT_WIFI*>(arg);
-+        auto& app = Application::GetInstance();
-+        for (int i = 0; i < 120 && app.GetDeviceState() != kDeviceStateIdle; i++) vTaskDelay(pdMS_TO_TICKS(1000));
-+        if (app.GetDeviceState() == kDeviceStateIdle) {
-+            ESP_LOGI(TAG, "hardware profile: %s", cv::HwReload("").c_str());
-+            if (self->eyes_) ESP_LOGI(TAG, "loading skin: %s", self->eyes_->LoadSkinFromUrl(ActiveSkinUrl()).c_str());
-+        }
-+        vTaskDelete(nullptr);
-     }
+-    }
++    static gpio_num_t PinOrNc(int pin) { return cv::PinOrNc(pin); }
  
      void InitializeTools() {
 +        cv::InitIo(display_, eyes_);
-+        xTaskCreate(SkinBootTask, "skin", 6144, this, 2, nullptr);
-+        auto& mcp = McpServer::GetInstance();
-+        mcp.AddTool("self.eyes.load_skin",
-+            "Download a screen skin JSON from the voice server and apply it now. `url`: skin address "
-+            "(normally http://<server>/skins/active.json).",
-+            PropertyList({Property("url", kPropertyTypeString)}),
-+            [this](const PropertyList& properties) -> ReturnValue {
-+                if (!eyes_) return std::string("this screen has no animated eyes");
-+                return eyes_->LoadSkinFromUrl(properties["url"].value<std::string>());
-+            });
-+        mcp.AddTool("self.eyes.set_style",
-+            "Switch the screen look. `style`: `classic` (retro CRT camera-lens eyes), `circuit` (circuit-board "
-+            "robot face), `pixel` (8-bit game eyes), `hud` (holographic AI core), `orb` (glowing assistant orb), "
-+            "`pet` (soft cute robot eyes), `minimal` (two dots and a voice line) or `eye` (one realistic eye). "
-+            "Combine with self.eyes.set_color. Persists across reboots.",
-+            PropertyList({Property("style", kPropertyTypeString)}),
-+            [this](const PropertyList& properties) -> ReturnValue {
-+                if (!eyes_) return std::string("this screen has no animated eyes");
-+                return eyes_->SetEyeStyle(properties["style"].value<std::string>());
-+            });
-+        mcp.AddTool("self.eyes.set_color",
-+            "Set the color of the robot eyes / screen phosphor. `color`: `amber` (default) or `green`. Persists across reboots.",
-+            PropertyList({Property("color", kPropertyTypeString)}),
-+            [this](const PropertyList& properties) -> ReturnValue {
-+                if (!eyes_) return std::string("this screen has no animated eyes");
-+                return eyes_->SetEyeColor(properties["color"].value<std::string>());
-+            });
-+        mcp.AddTool("self.eyes.show_emotion",
-+            "Make the robot eyes show an emotion for a few seconds. `emotion`: neutral, happy, sad, angry, "
-+            "surprised, thinking or sleepy. `seconds`: how long to hold it (1-60).",
-+            PropertyList({Property("emotion", kPropertyTypeString),
-+                          Property("seconds", kPropertyTypeInteger, 5, 1, 60)}),
-+            [this](const PropertyList& properties) -> ReturnValue {
-+                if (!eyes_) return std::string("this screen has no animated eyes");
-+                return eyes_->ShowEyeEmotion(properties["emotion"].value<std::string>(),
-+                                                properties["seconds"].value<int>());
-+            });
++        cv::RegisterEyeTools(&eyes_);
++        cv::StartBootTask(&eyes_);
      }
  
  public:
@@ -3202,58 +3874,32 @@ index 5f7c305..93a8abf 100644
 -        InitializeSpi();
          InitializeButtons();
 -        InitializeSt7789Display();  
-+        InitializeDisplay();  
++        display_ = cv::CreateDisplay(cv::Hw().display, &eyes_);
          InitializeTools();
 -        GetBacklight()->RestoreBrightness();
 +        if (GetBacklight()) GetBacklight()->RestoreBrightness();
      }
  
-     // 获取音频编解码器
+-    // 获取音频编解码器
      virtual AudioCodec* GetAudioCodec() override {
-         // 静态实例化NoAudioCodecSimplex类
-+        const auto& hw = cv::Hw();
-         static NoAudioCodecSimplex audio_codec(AUDIO_INPUT_SAMPLE_RATE, AUDIO_OUTPUT_SAMPLE_RATE,
+-        // 静态实例化NoAudioCodecSimplex类
+-        static NoAudioCodecSimplex audio_codec(AUDIO_INPUT_SAMPLE_RATE, AUDIO_OUTPUT_SAMPLE_RATE,
 -            AUDIO_I2S_SPK_GPIO_BCLK, AUDIO_I2S_SPK_GPIO_LRCK, AUDIO_I2S_SPK_GPIO_DOUT, AUDIO_I2S_MIC_GPIO_SCK, AUDIO_I2S_MIC_GPIO_WS, AUDIO_I2S_MIC_GPIO_DIN);
-+            PinOrNc(hw.spk_bclk), PinOrNc(hw.spk_lrck), PinOrNc(hw.spk_dout),
-+            PinOrNc(hw.mic_sck), PinOrNc(hw.mic_ws), PinOrNc(hw.mic_din));
-         // 返回音频编解码器
-         return &audio_codec;
-     }
- 
+-        // 返回音频编解码器
+-        return &audio_codec;
++        static AudioCodec* codec = cv::CreateAudioCodec(cv::Hw().audio);
++        return codec;
++    }
++
 +    // Camera module wired to the board (type "board" in the hardware profile). The assistant gets the stock
 +    // self.camera.take_photo tool; photos go to the voice server's /vision/explain.
 +    virtual Camera* GetCamera() override {
-+        static Camera* camera = nullptr;
-+        static bool tried = false;
-+        const auto& c = cv::Hw().camera;
-+        if (tried || c.type != "board") return camera;
-+        tried = true;
-+        camera_config_t config = {};
-+        config.pin_d0 = c.d[0]; config.pin_d1 = c.d[1]; config.pin_d2 = c.d[2]; config.pin_d3 = c.d[3];
-+        config.pin_d4 = c.d[4]; config.pin_d5 = c.d[5]; config.pin_d6 = c.d[6]; config.pin_d7 = c.d[7];
-+        config.pin_xclk = c.xclk;
-+        config.pin_pclk = c.pclk;
-+        config.pin_vsync = c.vsync;
-+        config.pin_href = c.href;
-+        config.pin_sccb_sda = c.sda;
-+        config.pin_sccb_scl = c.scl;
-+        config.sccb_i2c_port = 1;
-+        config.pin_pwdn = c.pwdn;
-+        config.pin_reset = c.reset;
-+        config.xclk_freq_hz = 20000000;
-+        config.pixel_format = PIXFORMAT_RGB565;
-+        config.frame_size = FRAMESIZE_QVGA;
-+        config.jpeg_quality = 12;
-+        config.fb_count = 1;
-+        config.fb_location = CAMERA_FB_IN_PSRAM;
-+        config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
-+        camera = new Esp32Camera(config);
-+        ESP_LOGI(TAG, "camera module initialised from the hardware profile");
++        static Camera* camera = cv::CreateCamera(cv::Hw().camera);
 +        return camera;
-+    }
-+
+     }
+ 
      virtual Display* GetDisplay() override {
-         return display_;
+@@ -196,7 +169,9 @@ public:
      }
      
      virtual Backlight* GetBacklight() override {
@@ -3264,33 +3910,6 @@ index 5f7c305..93a8abf 100644
          return &backlight;
      }
  
-diff --git a/main/boards/zhengchen-1.54tft-wifi/zhengchen_lcd_display.h b/main/boards/zhengchen-1.54tft-wifi/zhengchen_lcd_display.h
-index fa6222a..f07155b 100644
---- a/main/boards/zhengchen-1.54tft-wifi/zhengchen_lcd_display.h
-+++ b/main/boards/zhengchen-1.54tft-wifi/zhengchen_lcd_display.h
-@@ -15,6 +15,7 @@ public:
-     using SpiLcdDisplay::SpiLcdDisplay;
- 
-     void SetupHighTempWarningPopup() {
-+        DisplayLockGuard lock(this);  // LVGL task is already running: never touch objects unlocked
-         auto lvgl_theme = static_cast<LvglTheme*>(current_theme_);
-         auto text_font = lvgl_theme->text_font()->font();
-         // 创建高温警告弹窗
-@@ -49,12 +50,14 @@ public:
-     }
- 
-     void ShowHighTempWarning() {
-+        DisplayLockGuard lock(this);
-         if (high_temp_popup_ && lv_obj_has_flag(high_temp_popup_, LV_OBJ_FLAG_HIDDEN)) {
-             lv_obj_remove_flag(high_temp_popup_, LV_OBJ_FLAG_HIDDEN);
-         }
-     }
- 
-     void HideHighTempWarning() {
-+        DisplayLockGuard lock(this);
-         if (high_temp_popup_ && !lv_obj_has_flag(high_temp_popup_, LV_OBJ_FLAG_HIDDEN)) {
-             lv_obj_add_flag(high_temp_popup_, LV_OBJ_FLAG_HIDDEN);
-         }
 diff --git a/main/cv_discovery.cc b/main/cv_discovery.cc
 new file mode 100644
 index 0000000..ba24d88
@@ -3504,3 +4123,17 @@ index f0cc034..01e4d8d 100644
          SetError(Lang::Strings::SERVER_NOT_CONNECTED);
          return false;
      }
+diff --git a/partitions/v2/8m_claudevoice.csv b/partitions/v2/8m_claudevoice.csv
+new file mode 100644
+index 0000000..3a0e7c8
+--- /dev/null
++++ b/partitions/v2/8m_claudevoice.csv
+@@ -0,0 +1,8 @@
++# ESP-IDF Partition Table (ClaudeVoice, 8 MB): slightly bigger app slots than 8m.csv, assets 1.75 MB
++# Name,   Type, SubType, Offset,  Size, Flags
++nvs,      data, nvs,     0x9000,    0x4000,
++otadata,  data, ota,     0xd000,    0x2000,
++phy_init, data, phy,     0xf000,    0x1000,
++ota_0,    app,  ota_0,   0x20000,   0x310000,
++ota_1,    app,  ota_1,   ,          0x310000,
++assets,   data, spiffs,  0x640000,  0x1C0000,

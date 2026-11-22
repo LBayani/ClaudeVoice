@@ -102,6 +102,7 @@ class Tray:
     def _menu(self):
         return pystray.Menu(
             pystray.MenuItem("Открыть настройки", self.open_settings, default=True),
+            pystray.MenuItem("Мастер настройки устройства", self.open_wizard),
             pystray.MenuItem(lambda _: self._status_text(), None, enabled=False),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Перезапустить сервер", self.restart_server),
@@ -157,8 +158,11 @@ class Tray:
             self.start_server()
         threading.Thread(target=work, daemon=True).start()
 
-    def open_settings(self, *_):
-        url = BASE + "/ui"
+    def open_wizard(self, *_):
+        self.open_settings(page="#wizard")
+
+    def open_settings(self, *_, page: str = ""):
+        url = BASE + "/ui" + page
         edge = next((p for p in EDGE if p.exists()), None)
         if edge:
             subprocess.Popen([str(edge), f"--app={url}", f"--user-data-dir={ROOT / '.appdata' / 'edge'}",

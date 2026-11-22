@@ -30,3 +30,12 @@ personas/*.json
 skins/*.json
 # Tool caches
 .claude/
+
+# Wizard: flash backups of your boards and built firmware images
+backups/
+firmware/images/
+
+# Per-device hardware profiles (your boards) and release build output
+hardware/
+hardware.json.migrated
+dist_release/

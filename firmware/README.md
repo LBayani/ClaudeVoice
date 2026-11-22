@@ -3,39 +3,46 @@
 The device runs [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) (MIT) with the changes in
 `claudevoice.patch`, applied to upstream commit `e77dedb1309153bb63fed285772962c920c97dd4` (v2.2.4).
 
-What the patch adds (board `zhengchen-1.54tft-wifi`, ESP32-S3 with octal PSRAM):
+## Universal firmware — nothing to compile
 
-- animated eyes and 8 skins rendered on the device (`cv_eyes*`, `cv_skins.cc`), skins loaded from the server
-- **hardware profile** (`cv_hw.*`): display driver/resolution/pins, audio/button/power pins, inputs,
-  outputs and camera pins come from the server's `/device/hardware.json`; hold **Volume −** at power-on
-  to ignore a broken profile
-- touch antennae / buttons with configurable actions, vibration and other outputs, GPIO tools for the
-  assistant (`cv_io.*`)
-- **LAN auto-discovery** of the server over UDP 8766 (`main/cv_discovery.*`)
-- board camera support through the stock `self.camera.take_photo` tool
+Users do not build anything. The app's **setup wizard** («Мастер настройки») flashes a ready
+**universal image** for the detected chip and writes a settings partition next to it:
 
-## Build
+| Image | Chip / memory |
+|---|---|
+| `claudevoice-s3-16m.bin` | ESP32-S3, 16 MB flash, octal PSRAM (N16R8) |
+| `claudevoice-s3-8m.bin` | ESP32-S3, 8 MB flash, octal PSRAM (N8R8) |
+| `claudevoice-s3-8m-quad.bin` | ESP32-S3, 8 MB flash, quad PSRAM or none (N8R2, N8) |
+| `claudevoice-c3-4m.bin` | ESP32-C3, 4 MB flash or more |
+
+The board itself is not compiled in. Display (ST7789, GC9A01, ILI9341, ST7796, SSD1306/SH1106 OLED),
+audio (INMP441 + MAX98357 style I2S, one I2S bus, ES8311, ES8311 + ES7210), buttons, touch antennae
+(ESP32-S3), outputs and the camera come from the **hardware profile**. The wizard writes it into NVS
+together with Wi-Fi and the server address, taken from a known board (`board_presets.json`, imported
+from the xiaozhi board definitions) or left empty to fill in later in the app («Железо»).
+
+The wizard downloads the images from this repository's GitHub release (or uses `images/` if present).
+
+Safe mode: press and hold **BOOT** right after power-on to start with the factory profile.
+
+## What the patch adds
+
+- universal boards `claudevoice-s3` / `claudevoice-c3` and the shared body code in
+  `main/boards/claudevoice-common` (also used by `zhengchen-1.54tft-wifi`)
+- animated eyes and 8 skins (colour SPI screen + PSRAM), skins loaded from the server
+- hardware profile, per device (`/device/hardware.json`, keyed by MAC)
+- touch antennae / buttons with configurable actions, outputs, GPIO tools for the assistant
+- LAN auto-discovery of the server over UDP 8766
+- board camera support (ESP32-S3)
+
+## Building the images (maintainers)
 
 Needs Git and Docker Desktop.
 
 ```powershell
 cd firmware
-.\build.ps1
+.\build.ps1                      # all universal images -> images\*.bin
+.\build.ps1 -Variant claudevoice-c3-4m
 ```
 
-The script clones upstream, applies the patch and builds `xiaozhi-esp32\build\xiaozhi.bin`, then copies
-it to `..\ota\` so devices already running this firmware update over Wi-Fi on their next start.
-
-## First install over USB
-
-Hold **BOOT**, connect USB (or press RESET while holding BOOT), then:
-
-```powershell
-cd firmware\xiaozhi-esp32\build
-esptool --chip esp32s3 --port COM8 --baud 460800 write-flash --flash-mode dio --flash-freq 80m --flash-size 16MB `
-  0x0 bootloader/bootloader.bin 0x8000 partition_table/partition-table.bin 0xd000 ota_data_initial.bin `
-  0x20000 xiaozhi.bin 0x800000 generated_assets.bin
-```
-
-(`pip install esptool`; replace `COM8` with your port.) Wi-Fi is set up on first boot through the
-device's `Xiaozhi-XXXX` hotspot; after that it finds the ClaudeVoice server by itself.
+`tools/import_board_presets.py` refreshes `board_presets.json` from the xiaozhi board folders.

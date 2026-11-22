@@ -19,6 +19,8 @@ dependencies = [
     "pystray>=0.19.5",
     "yt-dlp>=2025.1",
     "yandex-music>=2.2",
+    "esptool>=4.8",
+    "esp-idf-nvs-partition-gen>=0.1",
 ]
 
 [tool.uv]

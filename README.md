@@ -53,6 +53,22 @@ uv run python tools/fake_device.py
 uv run python tools/fake_device.py --barge   # interrupt test
 ```
 
+## Set up a device (setup wizard)
+
+Click **«Мастер настройки»** in the app header (it also opens by itself on first start, and from the
+tray menu). Connect the board by USB and the wizard:
+
+1. finds it and reads the chip, flash, PSRAM, MAC and what firmware it runs now;
+2. recognises the board (xiaozhi boards carry their name) or lets you pick one of ~60 known boards, or
+   «Своя плата» to set the pins later in **Железо**;
+3. backs up the whole flash to `backups\`, then writes the **universal ClaudeVoice firmware** for the
+   chip (downloaded from this repository's Releases) plus a settings partition with the board profile,
+   your Wi-Fi and this PC's address — no compiler, no Docker;
+4. waits until the device joins the network and finds the PC.
+
+Supported chips: ESP32-S3 (16 MB / 8 MB flash, octal or quad PSRAM) and ESP32-C3 (4 MB+). See
+`firmware/README.md`.
+
 ## Point the device at this server
 
 With the firmware from `firmware/` there is nothing to set: the device finds the server on the LAN
@@ -137,6 +153,8 @@ Copy the folder and start it there: the device finds the new server by itself (U
 | `voice_server/server_tools.py` | Body tools for every brain (inputs, music, camera) |
 | `voice_server/music.py` | YouTube / Yandex / radio / Spotify playback to the device |
 | `voice_server/camera.py` | ESP32-CAM / PC / IP / board camera + vision |
+| `voice_server/flasher.py` | Setup wizard: board detection, backup, universal image + settings partition |
+| `firmware/board_presets.json` | Pins of known xiaozhi boards (`tools/import_board_presets.py`) |
 | `tools/fake_device.py` | Virtual device for offline tests |
 
 ## License
