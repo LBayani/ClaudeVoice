@@ -1,0 +1,1052 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClaudeVoice</title>
+<style>
+:root{
+  --bg:#0f0e0c; --panel:#171512; --panel2:#1e1b17; --line:#2c2822; --fg:#ece3d2; --dim:#968c7b;
+  --acc:#ffb347; --acc2:#ff9a1f; --ok:#8fd16a; --warn:#ffcc66; --bad:#ff6b5e; --r:10px;
+  --mono:"Cascadia Mono","Consolas",ui-monospace,monospace; --sans:"Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:14px/1.45 var(--sans)}
+body{display:grid;grid-template-columns:220px 1fr;grid-template-rows:56px 1fr}
+header{grid-column:1/3;display:flex;align-items:center;gap:14px;padding:0 20px;border-bottom:1px solid var(--line);background:#12110e}
+.logo{font:600 15px var(--mono);letter-spacing:.14em;color:var(--acc);display:flex;align-items:center;gap:10px}
+.logo i{width:22px;height:22px;border-radius:50%;border:2px solid var(--acc);box-shadow:0 0 10px #ffb34766;position:relative}
+.logo i::after{content:"";position:absolute;inset:5px;border-radius:50%;background:var(--acc)}
+.pills{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.pill{font:12px var(--mono);padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--dim);display:flex;gap:6px;align-items:center;white-space:nowrap}
+.pill b{width:7px;height:7px;border-radius:50%;background:var(--dim)}
+.pill.ok b{background:var(--ok);box-shadow:0 0 6px var(--ok)} .pill.warn b{background:var(--warn)} .pill.bad b{background:var(--bad)}
+nav{border-right:1px solid var(--line);padding:14px 10px;background:#12110e;overflow:auto}
+nav a{display:flex;gap:10px;align-items:center;padding:9px 12px;border-radius:8px;color:var(--dim);text-decoration:none;cursor:pointer;margin-bottom:2px}
+nav a:hover{background:var(--panel);color:var(--fg)}
+nav a.on{background:var(--panel2);color:var(--acc)}
+nav a span{font:12px var(--mono);width:18px;text-align:center}
+main{overflow:auto;padding:22px 26px 60px}
+section{display:none;max-width:980px} section.on{display:block}
+h2{font:600 20px var(--sans);margin:0 0 4px} .sub{color:var(--dim);margin:0 0 18px}
+h3{font:600 12px var(--mono);letter-spacing:.12em;color:var(--dim);margin:0 0 12px;text-transform:uppercase}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
+.kv dt{color:var(--dim)} .kv dd{margin:0;font-family:var(--mono);word-break:break-all}
+label.f{display:block;margin:12px 0 6px;color:var(--dim);font-size:12.5px}
+input[type=text],input[type=number],select,textarea{width:100%;background:#0f0e0c;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:13px var(--sans)}
+textarea{font-family:var(--mono);min-height:84px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+button{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font:13px var(--sans);cursor:pointer}
+button:hover{border-color:var(--acc)} button:disabled{opacity:.45;cursor:not-allowed}
+button.pri{background:linear-gradient(180deg,var(--acc),var(--acc2));color:#1a1207;border:none;font-weight:600}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{border:none;border-radius:0;padding:9px 18px;background:transparent;color:var(--dim)}
+.seg button.on{background:var(--panel2);color:var(--acc)}
+.chk{display:inline-flex;align-items:center;gap:7px;margin:4px 14px 4px 0;cursor:pointer;font-size:13px}
+.chk input{accent-color:var(--acc);width:15px;height:15px}
+.switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer}
+.switch input{display:none} .switch i{width:38px;height:21px;border-radius:99px;background:#3a342b;position:relative;transition:.15s}
+.switch i::after{content:"";position:absolute;top:3px;left:3px;width:15px;height:15px;border-radius:50%;background:#cfc5b3;transition:.15s}
+.switch input:checked+i{background:var(--acc2)} .switch input:checked+i::after{left:20px;background:#fff}
+.hint{color:var(--dim);font-size:12.5px;margin-top:8px}
+.note{border-left:3px solid var(--acc);background:#1d1912;padding:10px 14px;border-radius:0 8px 8px 0;color:#e4d6bd;font-size:13px;margin-bottom:14px}
+.note.bad{border-color:var(--bad);background:#211412}
+.chips button{padding:5px 11px;font-size:12px;border-radius:99px;margin:3px 4px 3px 0}
+.bar{height:8px;border-radius:99px;background:#2a251e;overflow:hidden} .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc2),var(--acc));width:0;transition:width .4s}
+.reply{font-family:var(--mono);font-size:13px;background:#0f0e0c;border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-height:44px;white-space:pre-wrap;margin-top:10px}
+pre.log{font:12px/1.5 var(--mono);background:#0b0a09;border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;height:62vh;overflow:auto;margin:0;color:#cbbfa9}
+.big{font:600 28px var(--mono);color:var(--acc)}
+.emo button{min-width:96px}
+table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left} th{color:var(--dim);font-weight:500}
+.mono{font-family:var(--mono)} .r{text-align:right}
+.toast{position:fixed;right:18px;bottom:18px;background:var(--panel2);border:1px solid var(--acc);padding:10px 14px;border-radius:9px;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none;max-width:420px}
+.toast.on{opacity:1;transform:none} .toast.err{border-color:var(--bad)}
+.skins{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.sk{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:8px;cursor:pointer;position:relative}
+.sk:hover{border-color:#5a4a33} .sk.on{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc) inset}
+.sk canvas{width:100%;aspect-ratio:1;display:block;border-radius:6px;image-rendering:pixelated;background:#000}
+.sk .nm{font-size:12.5px;margin:7px 2px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sk .act{display:flex;gap:4px;margin-top:6px} .sk .act button{padding:4px 7px;font-size:11.5px;flex:1}
+.sk .badge{position:absolute;top:12px;left:12px;background:var(--acc);color:#1a1207;font:600 10px var(--mono);padding:2px 6px;border-radius:4px}
+.sk .ds{font-size:11px;color:var(--dim);margin:0 2px 4px;line-height:1.3;min-height:28px}
+.sw{display:flex;flex-wrap:wrap;gap:4px;margin:4px 2px} .sw i{width:15px;height:15px;border-radius:50%;cursor:pointer;border:1px solid #0006;box-shadow:0 0 0 1px #ffffff14}
+.sw i:hover{transform:scale(1.2)} .sw i.on{box-shadow:0 0 0 2px var(--fg)}
+.skins{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
+.ed{display:grid;grid-template-columns:260px 1fr;gap:20px} .ed-prev canvas{width:240px;height:240px;image-rendering:pixelated;border-radius:8px;background:#000;border:1px solid var(--line)}
+.ed-prev .row button{padding:5px 9px;font-size:12px} .ed-l{margin:0;width:78px}
+#ed-colors input[type=color]{width:46px;height:32px;border:1px solid var(--line);border-radius:6px;background:none;padding:2px;cursor:pointer}
+.btnfile{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px} .btnfile input{display:none}
+@media (max-width:900px){.ed{grid-template-columns:1fr}}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:16px}
+.pc{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;cursor:pointer;position:relative}
+.pc:hover{border-color:#5a4a33} .pc.on{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc) inset}
+.pc b{display:block;font-size:14.5px;margin-bottom:2px} .pc .d{color:var(--dim);font-size:12px}
+.pc q{display:block;font-style:italic;font-size:12.5px;margin-top:8px;color:#d9c9a8}
+.pc .badge{position:absolute;top:10px;right:10px;background:var(--acc);color:#1a1207;font:600 10px var(--mono);padding:2px 6px;border-radius:4px}
+.pc .act{display:flex;gap:6px;margin-top:10px} .pc .act button{padding:4px 9px;font-size:12px}
+@media (max-width:760px){body{grid-template-columns:1fr;grid-template-rows:56px auto 1fr} nav{display:flex;overflow-x:auto;border-right:none;border-bottom:1px solid var(--line);padding:6px} nav a{white-space:nowrap} main{padding:16px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><i></i>CLAUDEVOICE</div>
+  <div class="pills">
+    <div class="pill" id="p-server"><b></b>сервер</div>
+    <div class="pill" id="p-device"><b></b>устройство</div>
+    <div class="pill" id="p-brain"><b></b>мозг</div>
+  </div>
+</header>
+<nav id="nav">
+  <a data-s="overview" class="on"><span>◉</span>Обзор</a>
+  <a data-s="brain"><span>✦</span>Мозг</a>
+  <a data-s="persona"><span>☺</span>Характер</a>
+  <a data-s="voice"><span>♪</span>Голос</a>
+  <a data-s="skins"><span>▦</span>Скины</a>
+  <a data-s="device"><span>◐</span>Устройство</a>
+  <a data-s="pins"><span>⌁</span>Пины и антенки</a>
+  <a data-s="hw"><span>⚙</span>Железо</a>
+  <a data-s="music"><span>♫</span>Музыка</a>
+  <a data-s="camera"><span>◎</span>Камера</a>
+  <a data-s="firmware"><span>⇪</span>Прошивка</a>
+  <a data-s="logs"><span>≡</span>Журнал</a>
+</nav>
+<main>
+<div class="note" id="loading" style="display:none;max-width:980px"><b>Сервер загружает модели</b> — <span id="loading-stage"></span>… После перезагрузки ПК это занимает 1–3 минуты. Окно обновится само.</div>
+
+<!-- OVERVIEW -->
+<section id="s-overview" class="on">
+  <h2>Обзор</h2><p class="sub">Состояние сервера, устройства и быстрый тест мозга.</p>
+  <div class="grid">
+    <div class="card"><h3>Устройство</h3><dl class="kv" id="ov-device"></dl></div>
+    <div class="card"><h3>Сервер</h3><dl class="kv" id="ov-server"></dl>
+      <div class="row" style="margin-top:14px">
+        <label class="switch"><input type="checkbox" id="autostart"><i></i>Запускать сервер вместе с Windows</label>
+      </div>
+    </div>
+  </div>
+  <div class="card"><h3>Проверить мозг текстом</h3>
+    <div class="row"><input type="text" id="test-q" placeholder="Например: какой сегодня день?" style="flex:1;min-width:220px"><button class="pri" id="test-go">Спросить</button></div>
+    <div class="reply" id="test-a">—</div>
+    <div class="hint">Ответ приходит от текущего мозга, как если бы вы спросили голосом (без озвучки).</div>
+  </div>
+</section>
+
+<!-- BRAIN -->
+<section id="s-brain">
+  <h2>Мозг</h2><p class="sub">Кто отвечает на ваши вопросы.</p>
+  <div class="card">
+    <div class="seg" id="brain-seg">
+      <button data-v="claude">Claude</button><button data-v="ollama">Ollama</button><button data-v="openai">LM Studio, llama.cpp и др.</button><button data-v="echo">Эхо (тест)</button>
+    </div>
+    <div class="hint" id="brain-hint"></div>
+  </div>
+
+  <div id="b-claude">
+    <div class="grid">
+      <div class="card"><h3>Модель Claude</h3>
+        <select id="cl-model"><option value="">По умолчанию (как в Claude Code)</option><option value="opus">Opus — умнее</option><option value="sonnet">Sonnet — быстрее и дешевле</option><option value="haiku">Haiku — самый быстрый</option></select>
+        <label class="f">Рабочая папка Claude</label><input type="text" id="cl-cwd">
+        <div class="row" style="margin-top:14px"><label class="switch"><input type="checkbox" id="cl-dev"><i></i>Управлять устройством (глаза, громкость, пины)</label></div>
+      </div>
+      <div class="card"><h3>Что можно без спроса</h3>
+        <div id="cl-tools"></div>
+        <div class="hint">В голосовом режиме Claude не может переспросить разрешение: всё, что не отмечено, будет отклонено. Форматирование дисков, выключение ПК и рекурсивное удаление заблокированы всегда.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="b-pc" class="card"><h3>Действия на компьютере</h3>
+    <div class="row"><label class="switch"><input type="checkbox" id="pc-on"><i></i>Открывать программы, сайты и папки, узнавать дату и место на дисках</label></div>
+    <div class="row" style="margin-top:10px"><label class="switch"><input type="checkbox" id="pc-ps"><i></i>Выполнять команды PowerShell</label></div>
+    <div class="hint">Команды PowerShell дают локальной модели почти полный доступ к ПК, а устройство слышит всех в комнате. Удаление, форматирование, выключение и запуск скачанных скриптов заблокированы всегда.</div>
+  </div>
+
+  <div id="b-openai">
+    <div class="note bad" id="oa-down" style="display:none">Движок не отвечает: <span class="mono" id="oa-err"></span>. Запустите сервер движка (в LM Studio — вкладка Developer → Start Server) и загрузите модель.</div>
+    <div class="grid">
+      <div class="card"><h3>Движок</h3>
+        <select id="oa-preset"></select>
+        <label class="f">Адрес OpenAI-совместимого API</label><input type="text" id="oa-url" placeholder="http://127.0.0.1:1234/v1">
+        <label class="f">API-ключ (если движок его требует)</label><input type="text" id="oa-key" placeholder="не нужен для локальных движков" autocomplete="off">
+        <div class="row" style="margin-top:12px"><button id="oa-test">Проверить подключение</button><span class="hint mono" id="oa-st" style="margin:0"></span></div>
+        <div class="row" style="margin-top:10px"><button id="oa-find">Найти движки на этом ПК</button><button id="oa-start">Запустить движок</button></div>
+        <div id="oa-found" class="chips" style="margin-top:6px"></div>
+        <div class="row" style="margin-top:12px"><label class="switch"><input type="checkbox" id="oa-auto"><i></i>Запускать движок автоматически</label></div>
+        <div class="hint">LM Studio и Bionic запускаются сами, без окна. Если порт занят резервом Windows, будет выбран свободный.</div>
+        <label class="f">Команда запуска (для других движков, необязательно)</label>
+        <input type="text" id="oa-cmd" placeholder="например: C:\llama-swap\llama-swap.exe --config C:\llama-swap\config.yaml --listen 127.0.0.1:8080">
+      </div>
+      <div class="card"><h3>Модель</h3>
+        <div class="row"><select id="oa-model" style="flex:1"></select><button id="oa-refresh" title="Обновить список">↻</button></div>
+        <label class="f">Или имя вручную</label><input type="text" id="oa-model-t" placeholder="как в списке моделей движка">
+        <label class="f">Креативность: <span class="mono" id="oa-temp-v"></span></label><input type="range" id="oa-temp" min="0" max="1.2" step="0.05">
+        <div class="row" style="margin-top:12px"><label class="switch"><input type="checkbox" id="oa-nothink"><i></i>Отключать «размышление» (/no_think)</label></div>
+        <div class="row" style="margin-top:10px"><label class="switch"><input type="checkbox" id="oa-dev"><i></i>Управлять устройством через инструменты</label></div>
+        <div class="hint">Инструменты работают, если модель и движок поддерживают function calling (LM Studio, llama.cpp с --jinja, vLLM).</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="b-ollama">
+    <div class="note bad" id="ol-down" style="display:none">Ollama не отвечает по адресу <span class="mono" id="ol-url-t"></span>. Запустите Ollama и обновите страницу.</div>
+    <div class="grid">
+      <div class="card"><h3>Модель</h3>
+        <div class="row"><select id="ol-model" style="flex:1"></select><button id="ol-refresh" title="Обновить список">↻</button></div>
+        <div class="hint" id="ol-info"></div>
+        <div class="row" style="margin-top:14px"><label class="switch"><input type="checkbox" id="ol-managed"><i></i>Своя Ollama для ClaudeVoice</label></div>
+        <div class="hint">Сервер сам запускает отдельную Ollama с вашей папкой моделей на порту 11435. Ваше приложение Ollama не затрагивается.</div>
+        <label class="f">Папка моделей</label><input type="text" id="ol-mdir" placeholder="D:\ollama-models">
+        <label class="f">Адрес Ollama</label><input type="text" id="ol-url">
+        <label class="f">Креативность: <span class="mono" id="ol-temp-v"></span></label><input type="range" id="ol-temp" min="0" max="1.2" step="0.05">
+        <div class="row" style="margin-top:12px"><label class="switch"><input type="checkbox" id="ol-think"><i></i>Скрытое «размышление» (медленнее, точнее)</label></div>
+        <div class="row" style="margin-top:10px"><label class="switch"><input type="checkbox" id="ol-dev"><i></i>Управлять устройством через инструменты</label></div>
+        <div class="hint">Управление устройством работает с моделями, которые умеют вызывать инструменты: Qwen 3, Qwen 2.5, Llama 3.1+, Mistral.</div>
+      </div>
+      <div class="card"><h3>Скачать модель</h3>
+        <div class="chips" id="ol-rec"></div>
+        <div class="row" style="margin-top:8px"><input type="text" id="ol-pull-name" placeholder="имя модели, например qwen3:14b" style="flex:1"><button class="pri" id="ol-pull">Скачать</button></div>
+        <div style="margin-top:12px" class="bar"><i id="ol-bar"></i></div>
+        <div class="hint mono" id="ol-pull-st">RTX 3090 (24 ГБ) спокойно тянет модели до ~30B в сжатии q4.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PERSONA -->
+<section id="s-persona">
+  <h2>Характер</h2><p class="sub">Как устройство разговаривает. Действует на любой мозг: Claude, Ollama и другие движки.</p>
+  <div class="pgrid" id="pgrid"></div>
+  <div class="grid">
+    <div class="card"><h3>Свой характер</h3>
+      <input type="text" id="pe-name" placeholder="Название, например «Капитан Немо»">
+      <label class="f">Опишите характер: как говорит, что любит, как обращается к вам</label>
+      <textarea id="pe-prompt" style="min-height:150px" placeholder="Твой характер: ..."></textarea>
+      <label class="f">Пример фразы (для карточки, необязательно)</label><input type="text" id="pe-sample">
+      <div class="row" style="margin-top:12px"><button class="pri" id="pe-save">Сохранить</button><button id="pe-save-use">Сохранить и включить</button><button id="pe-clear">Очистить</button></div>
+    </div>
+    <div class="card"><h3>Неизменные правила тела</h3>
+      <div class="hint" style="margin-top:0">Добавляются к любому характеру, их нельзя отключить:</div>
+      <div class="reply" id="pe-body" style="font-family:var(--sans);font-size:12.5px"></div>
+      <h3 style="margin-top:16px">Проверить характер</h3>
+      <div class="row"><input type="text" id="pe-q" value="Я сейчас тебя выключу." style="flex:1"><button id="pe-test">Спросить</button></div>
+      <div class="reply" id="pe-a">—</div>
+    </div>
+  </div>
+</section>
+
+<!-- VOICE -->
+<section id="s-voice">
+  <h2>Голос</h2><p class="sub">Как устройство говорит и слушает.</p>
+  <div class="grid">
+    <div class="card"><h3>Голос ответа</h3><div id="speakers"></div>
+      <label class="f">Текст для пробы</label><input type="text" id="tts-text" value="Привет! Так звучит мой голос.">
+    </div>
+    <div class="card"><h3>Слух</h3>
+      <label class="f">Пауза, после которой фраза считается законченной: <span class="mono" id="vad-v"></span></label>
+      <input type="range" id="vad" min="300" max="1500" step="50">
+      <label class="f">Через сколько секунд тишины уснуть: <span class="mono" id="idle-v"></span></label>
+      <input type="range" id="idle" min="8" max="120" step="1">
+      <label class="f">Через сколько секунд сказать «секунду…»: <span class="mono" id="fill-v"></span></label>
+      <input type="range" id="fill" min="0.5" max="6" step="0.5">
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>Ответ на триггерное слово</h3><textarea id="greet"></textarea><div class="hint">По одной фразе в строке, выбирается случайная.</div></div>
+    <div class="card"><h3>Фразы-заполнители</h3><textarea id="fillers"></textarea></div>
+    <div class="card"><h3>Стоп-слова</h3><textarea id="stops"></textarea></div>
+  </div>
+  <button class="pri" id="voice-save">Сохранить фразы</button>
+</section>
+
+<!-- SKINS -->
+<section id="s-skins">
+  <h2>Скины</h2><p class="sub">Внешний вид экрана устройства. Устройство скачивает скин с этого сервера: сразу, если оно на связи, иначе при следующем включении.</p>
+  <div class="skins" id="skin-grid"></div>
+  <div class="card" id="skin-editor"><h3>Свой скин</h3>
+    <div class="ed">
+      <div class="ed-prev"><canvas id="ed-canvas" width="240" height="240"></canvas>
+        <div class="row" style="margin-top:8px"><button data-st="idle">Покой</button><button data-st="listening">Слушает</button><button data-st="speaking">Говорит</button><button data-st="thinking">Думает</button></div></div>
+      <div class="ed-form">
+        <div class="row"><input type="text" id="ed-name" placeholder="Название, например «Ночной дозор»" style="flex:1">
+          <select id="ed-base" style="width:150px"><option value="classic">Объективы</option><option value="circuit">Схема</option>
+            <option value="pixel">8-бит</option><option value="hud">Голограмма</option><option value="orb">Сфера</option>
+            <option value="pet">Питомец</option><option value="minimal">Минимал</option><option value="eye">Глаз</option></select></div>
+        <label class="f">Палитра люминофора</label>
+        <div class="row"><select id="ed-pal-preset" style="width:150px"></select>
+          <span class="hint" style="margin:0">тень → середина → свет → блик</span></div>
+        <div class="row" style="margin-top:6px" id="ed-colors"></div>
+        <label class="f">Фоновая картинка (PNG/JPG — станет светящимся слоем)</label>
+        <div class="row"><input type="file" id="ed-img" accept="image/*" style="flex:1"><button id="ed-img-clear">Без фона</button></div>
+        <div class="row" style="margin-top:6px"><span class="hint" style="margin:0;width:90px">Яркость фона</span><input type="range" id="ed-bgb" min="0.1" max="1" step="0.05" value="0.45" style="flex:1">
+          <select id="ed-inv" style="width:150px"><option value="auto">инверсия: авто</option><option value="no">не инвертировать</option><option value="yes">инвертировать</option></select></div>
+        <div class="row" style="margin-top:12px"><label class="switch"><input type="checkbox" id="ed-eyes-on"><i></i>Своё положение глаз</label></div>
+        <div id="ed-eyes" style="display:none">
+          <div class="row"><span class="hint ed-l">Расстояние</span><input type="range" id="ed-ex" min="10" max="50" value="27" style="flex:1">
+            <span class="hint ed-l">Высота</span><input type="range" id="ed-ey" min="25" max="90" value="47" style="flex:1"></div>
+          <div class="row"><span class="hint ed-l">Размер</span><input type="range" id="ed-er" min="8" max="30" value="20" style="flex:1"></div>
+        </div>
+        <div class="row" style="margin-top:10px"><input type="text" id="ed-unit" placeholder="Имя на экране: UNIT-07" style="flex:1"><input type="text" id="ed-header" placeholder="Заголовок схемы: VOICE INTERFACE" style="flex:1"></div>
+        <div class="row" style="margin-top:14px"><button class="pri" id="ed-save">Сохранить скин</button><button id="ed-save-apply">Сохранить и применить</button>
+          <label class="btnfile">Импорт .cvskin.json<input type="file" id="ed-import" accept=".json"></label></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DEVICE -->
+<section id="s-device">
+  <h2>Устройство</h2><p class="sub">Экран, звук и эмоции. Работает, пока устройство на связи.</p>
+  <div class="note" id="dev-asleep">Устройство спит. Нажмите на нём кнопку или скажите триггерное слово — оно подключится к серверу на время разговора.</div>
+  <div class="grid">
+    <div class="card"><h3>Тема экрана</h3>
+      <div class="seg" id="style-seg"><button data-v="classic">Объективы</button><button data-v="circuit">Схема</button></div>
+      <h3 style="margin-top:18px">Цвет люминофора</h3>
+      <div class="seg" id="color-seg"><button data-v="amber">Янтарный</button><button data-v="green">Зелёный</button></div>
+    </div>
+    <div class="card"><h3>Звук и яркость</h3>
+      <label class="f">Громкость: <span class="mono" id="vol-v"></span></label><input type="range" id="vol" min="0" max="100" step="5">
+      <label class="f">Яркость: <span class="mono" id="bri-v"></span></label><input type="range" id="bri" min="5" max="100" step="5">
+    </div>
+  </div>
+  <div class="card emo"><h3>Показать эмоцию</h3><div class="row" id="emos"></div></div>
+</section>
+
+<!-- PINS -->
+<section id="s-pins">
+  <h2>Пины и антенки</h2><p class="sub">Свободные выводы и состояние антенок. Назначить антенки, кнопки и их действия — в разделе «Железо».</p>
+  <div class="note" id="pins-asleep">Устройство спит — разбудите его, чтобы управлять пинами.</div>
+  <div class="grid">
+    <div class="card"><h3>Привязанность</h3>
+      <div class="big" id="aff">—</div><div class="bar" style="margin:8px 0 10px"><i id="aff-bar"></i></div>
+      <dl class="kv" id="ant"></dl>
+    </div>
+    <div class="card"><h3>Серво</h3>
+      <div class="row"><select id="servo-pin" style="width:110px"></select><span class="mono" id="servo-v" style="width:46px">90°</span></div>
+      <input type="range" id="servo" min="0" max="180" step="1" value="90" style="margin-top:12px">
+      <div class="row" style="margin-top:10px"><button data-a="0">0°</button><button data-a="90">90°</button><button data-a="180">180°</button><button id="servo-rel">Отпустить</button></div>
+      <div class="hint">Сигнал — на пин, питание серво — от 5 В, земля общая.</div>
+    </div>
+  </div>
+  <div class="card"><h3>Выводы</h3><table id="pins"></table><div class="hint">GPIO2 держит питание устройства и недоступен.</div></div>
+</section>
+
+
+<!-- HARDWARE -->
+<section id="s-hw">
+  <h2>Железо</h2><p class="sub">Все технические детали устройства: дисплей, выводы, антенки и кнопки, выходы. Сохраняется в программе (hardware.json) и применяется на устройстве.</p>
+  <div class="note">Если после смены дисплея или пинов экран не работает — включите устройство, удерживая кнопку <b>«громкость −»</b>: оно загрузится с заводскими настройками, а вы исправите профиль здесь.</div>
+  <div class="grid">
+    <div class="card"><h3>Связь с компьютером</h3>
+      <label class="switch"><input type="checkbox" id="disc-on"><i></i>Автопоиск устройства в сети</label>
+      <div class="hint">Устройство само находит этот ПК в локальной сети (UDP 8766), даже если адреса ПК и устройства поменялись. Первый найденный сервер становится «своим».</div>
+      <dl class="kv" id="disc" style="margin-top:10px"></dl>
+    </div>
+    <div class="card"><h3>Дисплей</h3>
+      <label class="f">Готовый вариант</label><select id="hw-preset"></select>
+      <div class="row" style="margin-top:6px"><div style="flex:2"><label class="f">Драйвер</label><select id="hw-driver"></select></div>
+        <div style="flex:1"><label class="f">Ширина</label><input type="number" id="hw-w"></div><div style="flex:1"><label class="f">Высота</label><input type="number" id="hw-h"></div></div>
+      <div class="row"><div style="flex:1"><label class="f">Сдвиг X</label><input type="number" id="hw-ox"></div><div style="flex:1"><label class="f">Сдвиг Y</label><input type="number" id="hw-oy"></div>
+        <div style="flex:1"><label class="f">Частота SPI, МГц</label><input type="number" id="hw-mhz"></div><div style="flex:1"><label class="f">Режим SPI</label><input type="number" id="hw-mode" min="0" max="3"></div></div>
+      <div style="margin-top:10px"><label class="chk"><input type="checkbox" id="hw-mx">Отразить X</label><label class="chk"><input type="checkbox" id="hw-my">Отразить Y</label>
+        <label class="chk"><input type="checkbox" id="hw-sw">Повернуть 90°</label><label class="chk"><input type="checkbox" id="hw-inv">Инверсия цвета</label>
+        <label class="chk"><input type="checkbox" id="hw-bgr">Порядок BGR</label><label class="chk"><input type="checkbox" id="hw-bli">Подсветка инверсная</label></div>
+    </div>
+  </div>
+  <div class="card"><h3>Выводы дисплея</h3><div class="row" id="hw-dpins"></div>
+    <div class="hint" id="hw-bus-hint"></div></div>
+  <div class="card"><h3>Антенки и кнопки</h3>
+    <table id="hw-inputs"></table>
+    <div class="row" style="margin-top:10px"><button id="hw-in-add">+ Добавить вход</button></div>
+    <div class="hint">Сенсорные входы — только GPIO1–14. Касание, двойное касание и удержание можно связать с одним или двумя действиями. «Сообщить ассистенту» — ассистент сам решает, как отреагировать. Ассистент тоже может менять эти действия голосом.</div>
+  </div>
+  <div class="card"><h3>Выходы</h3>
+    <table id="hw-outputs"></table>
+    <div class="row" style="margin-top:10px"><button id="hw-out-add">+ Добавить выход</button></div>
+    <div class="hint">Вибромотор подключайте через транзистор или драйвер, не напрямую к пину (пин даёт до ~20 мА).</div>
+  </div>
+  <div class="card"><h3>Звук, кнопки, питание</h3><div class="row" id="hw-other"></div></div>
+  <div class="row"><button class="pri" id="hw-save">Сохранить и применить</button><button id="hw-reset">Заводские настройки</button><button id="hw-export">Скачать профиль</button>
+    <label class="btnfile">Загрузить профиль<input type="file" id="hw-import" accept=".json"></label></div>
+  <div class="reply" id="hw-res" style="display:none"></div>
+</section>
+
+<!-- MUSIC -->
+<section id="s-music">
+  <h2>Музыка</h2><p class="sub">Музыка играет через динамик устройства. Попросите голосом: «включи радио Европа Плюс», «поставь Кино», «включи мою волну».</p>
+  <div class="grid">
+    <div class="card"><h3>Основное</h3>
+      <label class="switch"><input type="checkbox" id="mu-on"><i></i>Музыка включена</label>
+      <label class="f">Источник по умолчанию</label>
+      <div class="seg" id="mu-src"><button data-v="youtube">YouTube</button><button data-v="yandex">Яндекс</button><button data-v="radio">Радио</button><button data-v="spotify">Spotify</button></div>
+      <label class="f">Громкость музыки относительно голоса: <span class="mono" id="mu-vol-v"></span></label><input type="range" id="mu-vol" min="0.1" max="1" step="0.05">
+      <label class="f">Качество (битрейт Opus)</label><select id="mu-br"><option value="32000">32 кбит/с — экономно</option><option value="48000">48 кбит/с — хорошо</option><option value="64000">64 кбит/с — лучше</option></select>
+    </div>
+    <div class="card"><h3>Проверить</h3>
+      <div class="row"><input type="text" id="mu-q" placeholder="Что включить" style="flex:1;min-width:180px"><select id="mu-qsrc" style="width:130px"><option value="">по умолчанию</option><option value="youtube">YouTube</option><option value="yandex">Яндекс</option><option value="radio">Радио</option><option value="spotify">Spotify</option></select></div>
+      <div class="row" style="margin-top:10px"><button class="pri" id="mu-play">Включить на устройстве</button><button id="mu-next">Дальше</button><button id="mu-stop">Стоп</button></div>
+      <div class="reply" id="mu-st">—</div>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>Яндекс Музыка</h3>
+      <label class="f">Токен аккаунта</label><input type="text" id="mu-ya" placeholder="y0_…">
+      <div class="hint">Токен вашего аккаунта (нужна подписка Плюс для полных треков). Как получить токен — описано в документации библиотеки yandex-music (раздел «Получение токена»). Токен хранится только на этом ПК.</div>
+    </div>
+    <div class="card"><h3>Spotify</h3>
+      <label class="f">Путь к librespot.exe</label><input type="text" id="mu-ls" placeholder="C:\Tools\librespot\librespot.exe">
+      <label class="f">Имя колонки в Spotify</label><input type="text" id="mu-sn">
+      <div class="hint">Нужен Spotify Premium. Скажите «включи Spotify», затем в приложении Spotify выберите колонку с этим именем — звук пойдёт на устройство.</div>
+    </div>
+  </div>
+</section>
+
+<!-- CAMERA -->
+<section id="s-camera">
+  <h2>Камера</h2><p class="sub">Ассистент может посмотреть через камеру: «что ты видишь?», «кто у двери?».</p>
+  <div class="card"><h3>Источник</h3>
+    <div class="seg" id="cam-src"><button data-v="none">Нет</button><button data-v="esp32cam">ESP32-CAM</button><button data-v="pc">Камера ПК / IP</button><button data-v="board">Модуль на плате</button></div>
+    <div id="cam-esp" style="display:none"><label class="f">Адрес ESP32-CAM</label><input type="text" id="cam-url" placeholder="http://192.168.0.50/capture">
+      <div class="hint">Прошейте ESP32-CAM стандартным примером CameraWebServer (Arduino) — снимок берётся с адреса /capture.</div></div>
+    <div id="cam-pc" style="display:none"><label class="f">Камера</label><div class="row"><select id="cam-dev" style="flex:1"></select><button id="cam-scan">↻</button></div>
+      <label class="f">или адрес IP-камеры (RTSP/HTTP)</label><input type="text" id="cam-ip" placeholder="rtsp://user:pass@192.168.0.60:554/stream1"></div>
+    <div id="cam-board" style="display:none"><div class="hint">Пины модуля OV2640/OV3660 задаются ниже и применяются при сохранении. На плате zhengchen 1.54 свободных выводов не хватает (нужно 14) — используйте ESP32-CAM.</div>
+      <div class="row" id="cam-pins" style="margin-top:8px"></div><div class="row" style="margin-top:10px"><button class="pri" id="cam-pins-save">Сохранить пины камеры</button></div></div>
+    <label class="f">Модель зрения для локальных мозгов (необязательно)</label><input type="text" id="cam-vm" placeholder="например qwen2.5vl:7b — пусто = текущая модель">
+    <div class="hint">Claude смотрит на снимок сам. Ollama и другим движкам нужна модель, понимающая изображения.</div>
+  </div>
+  <div class="card"><h3>Проверить</h3><div class="row"><button class="pri" id="cam-snap">Сделать снимок</button></div>
+    <img id="cam-img" style="max-width:100%;margin-top:12px;border-radius:8px;display:none"></div>
+</section>
+
+<!-- FIRMWARE -->
+<section id="s-firmware">
+  <h2>Прошивка</h2><p class="sub">Обновление по Wi-Fi через этот сервер.</p>
+  <div class="grid">
+    <div class="card"><h3>Версии</h3><dl class="kv" id="fw"></dl></div>
+    <div class="card"><h3>Загрузить новую</h3>
+      <input type="file" id="fw-file" accept=".bin"><div class="row" style="margin-top:12px"><button class="pri" id="fw-up">Загрузить</button><button id="fw-reboot">Перезагрузить устройство</button></div>
+      <div class="hint">Устройство проверяет обновления при включении: после загрузки перезагрузите его, и оно обновится само.</div>
+    </div>
+  </div>
+</section>
+
+<!-- LOGS -->
+<section id="s-logs">
+  <h2>Журнал</h2><p class="sub">Что слышит и отвечает сервер.</p>
+  <pre class="log" id="log"></pre>
+</section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script src="/ui/engine/cv_font.js"></script>
+<script src="/ui/engine/eyes_engine.js"></script>
+<script src="/ui/engine/skins_render.js"></script>
+<script>
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+let S = null, tab = "overview", ollama = {models: []};
+
+function toast(msg, err) { const t = $("#toast"); t.textContent = msg; t.className = "toast on" + (err ? " err" : ""); clearTimeout(t._h); t._h = setTimeout(() => t.className = "toast", 3200); }
+async function api(path, body, raw) {
+  const r = await fetch(path, body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  if (!r.ok) throw new Error(await r.text() || r.statusText);
+  return raw ? r : r.json();
+}
+async function save(changes, msg) {
+  try { S = await api("/api/config", changes); render(); if (msg !== false) toast(msg || "Сохранено"); }
+  catch (e) { toast(e.message, true); }
+}
+async function dev(tool, args = {}, msg) {
+  try { const r = await api("/api/device/call", {tool, arguments: args}); if (msg) toast(msg); return r.result; }
+  catch (e) { toast(e.message, true); }
+}
+const ago = t => { if (!t) return "никогда"; const s = Math.round(Date.now() / 1000 - t); return s < 60 ? s + " с назад" : s < 3600 ? Math.round(s / 60) + " мин назад" : Math.round(s / 3600) + " ч назад"; };
+const kv = (el, rows) => el.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v ?? "—"}</dd>`).join("");
+function pill(id, cls, text) { const p = $(id); p.className = "pill " + cls; p.lastChild.textContent = text; }
+
+// navigation
+$$("#nav a").forEach(a => a.onclick = () => {
+  tab = a.dataset.s; $$("#nav a").forEach(x => x.classList.toggle("on", x === a));
+  $$("main section").forEach(s => s.classList.toggle("on", s.id === "s-" + tab));
+  if (tab === "logs") loadLogs(); if (tab === "brain") { loadOllama(); loadOA(); } if (tab === "skins") loadSkins(); if (tab === "persona") loadPersonas(); if (tab === "hw" || tab === "camera") loadHw(); if (tab === "camera") scanCams(); if (tab === "music") tool("music_status"); refresh();
+});
+
+function seg(id, value, onPick) {
+  $$(id + " button").forEach(b => { b.classList.toggle("on", b.dataset.v === value); b.onclick = () => onPick(b.dataset.v); });
+}
+
+const BRAIN_NAMES = {claude: "Claude", ollama: "Ollama", openai: "Другой движок", echo: "Эхо"};
+const OA_PRESETS = [["lmstudio", "LM Studio", "http://127.0.0.1:1234/v1"], ["bionic", "Bionic", "http://127.0.0.1:1235/v1"], ["llamacpp", "llama.cpp / llama-swap", "http://127.0.0.1:8080/v1"],
+  ["vllm", "vLLM", "http://127.0.0.1:8000/v1"], ["koboldcpp", "KoboldCpp", "http://127.0.0.1:5001/v1"], ["jan", "Jan", "http://127.0.0.1:1337/v1"],
+  ["textgen", "text-generation-webui", "http://127.0.0.1:5000/v1"], ["ollama", "Ollama (OpenAI-режим)", "http://127.0.0.1:11434/v1"], ["custom", "Свой адрес", ""]];
+let oa = {reachable: null, models: []};
+const CL_TOOLS = [["Read", "Читать файлы"], ["Glob", "Искать файлы"], ["Grep", "Искать в файлах"], ["WebSearch", "Поиск в интернете"], ["WebFetch", "Открывать страницы"], ["Bash", "Команды Bash"], ["PowerShell", "Команды PowerShell"], ["Edit", "Править файлы"], ["Write", "Создавать файлы"]];
+const REC = [["qwen3:14b", "Qwen 3 14B · 9 ГБ · лучший баланс"], ["qwen3:8b", "Qwen 3 8B · 5 ГБ · быстрее"], ["qwen3:30b-a3b", "Qwen 3 30B MoE · 19 ГБ · умнее, быстро"], ["gemma3:12b", "Gemma 3 12B · 8 ГБ · без инструментов"]];
+const EMO = [["happy", "Радость"], ["surprised", "Удивление"], ["sad", "Грусть"], ["angry", "Злость"], ["thinking", "Задумчивость"], ["sleepy", "Сонливость"], ["neutral", "Спокойствие"]];
+
+function render() {
+  if (!S) return;
+  if (S.config.music) { renderMusic(); renderCamera(); renderDiscovery(); }
+  const c = S.config, d = S.device, online = d.connected;
+  pill("#p-server", "ok", "сервер работает");
+  pill("#p-device", online ? "ok" : (d.last_ota.time ? "warn" : "bad"), online ? "устройство на связи" : d.last_ota.time ? "устройство спит" : "устройство не найдено");
+  pill("#p-brain", c.brain === "ollama" && !ollama.reachable ? "bad" : "ok", "мозг: " + BRAIN_NAMES[c.brain] + (c.brain === "ollama" && c.ollama.model ? " · " + c.ollama.model : ""));
+
+  const st = d.status || {};
+  kv($("#ov-device"), [["Связь", online ? "на связи" : "спит (подключается по кнопке или слову)"], ["Плата", d.last_ota.board], ["Прошивка", d.last_ota.version], ["IP", d.last_ota.ip],
+    ["Последний выход на связь", ago(d.last_ota.time)], ["Батарея", st.battery ? st.battery.level + "%" + (st.battery.charging ? " · заряжается" : "") : "—"]]);
+  kv($("#ov-server"), [["Работает", Math.round(S.server.uptime_s / 60) + " мин"], ["Адрес для устройства", S.server.ota_url], ["Мозг", BRAIN_NAMES[c.brain]], ["Распознавание", c.asr.model + " · " + c.asr.device]]);
+  $("#autostart").checked = S.autostart;
+
+  // brain
+  seg("#brain-seg", c.brain, v => save({brain: v}, "Мозг: " + BRAIN_NAMES[v]));
+  $("#b-claude").style.display = c.brain === "claude" ? "" : "none";
+  $("#b-ollama").style.display = c.brain === "ollama" ? "" : "none";
+  $("#b-openai").style.display = c.brain === "openai" ? "" : "none";
+  $("#b-pc").style.display = ["ollama", "openai"].includes(c.brain) ? "" : "none";
+  $("#pc-on").checked = c.pc_tools.enabled; $("#pc-ps").checked = c.pc_tools.allow_powershell; $("#pc-ps").disabled = !c.pc_tools.enabled;
+  $("#brain-hint").textContent = {claude: "Claude Code на этом ПК: может работать с файлами, командами и интернетом. Модель работает в облаке Anthropic.",
+    ollama: "Модель работает целиком на вашем ПК, без интернета.",
+    openai: "Любой локальный движок с OpenAI-совместимым API: LM Studio, llama.cpp, llama-swap, vLLM, KoboldCpp, Jan и другие.",
+    echo: "Повторяет ваши слова. Для проверки микрофона и распознавания."}[c.brain];
+  renderOpenAI();
+  if (document.activeElement !== $("#cl-cwd")) $("#cl-cwd").value = c.claude.cwd;
+  $("#cl-model").value = c.claude.model; $("#cl-dev").checked = c.claude.device_tools;
+  $("#cl-tools").innerHTML = CL_TOOLS.map(([k, n]) => `<label class="chk"><input type="checkbox" data-t="${k}" ${c.claude.allowed_tools.includes(k) ? "checked" : ""}>${n}</label>`).join("");
+  $$("#cl-tools input").forEach(i => i.onchange = () => save({claude: {allowed_tools: $$("#cl-tools input:checked").map(x => x.dataset.t)}}));
+  if (document.activeElement !== $("#ol-url")) $("#ol-url").value = c.ollama.url;
+  $("#ol-url").disabled = c.ollama.managed;
+  $("#ol-managed").checked = c.ollama.managed;
+  if (document.activeElement !== $("#ol-mdir")) $("#ol-mdir").value = c.ollama.managed_models_dir;
+  $("#ol-temp").value = c.ollama.temperature; $("#ol-temp-v").textContent = c.ollama.temperature;
+  $("#ol-think").checked = c.ollama.think; $("#ol-dev").checked = c.ollama.device_tools;
+  renderOllamaModels();
+
+  // voice
+  $("#speakers").innerHTML = S.speakers.map(s => `<div class="row" style="margin-bottom:6px"><label class="chk" style="width:120px"><input type="radio" name="spk" value="${s}" ${s === c.tts.speaker ? "checked" : ""}>${s}</label><button data-play="${s}">▶ проба</button></div>`).join("");
+  $$("#speakers input").forEach(i => i.onchange = () => save({tts: {speaker: i.value}}, "Голос: " + i.value));
+  $$("#speakers [data-play]").forEach(b => b.onclick = () => play(b.dataset.play));
+  setRange("#vad", c.vad.min_silence_ms, v => v + " мс"); setRange("#idle", c.session.idle_timeout_s, v => v + " с"); setRange("#fill", c.session.filler_after_s, v => v + " с");
+  for (const [id, key] of [["#greet", "greetings"], ["#fillers", "fillers"], ["#stops", "stop_words"]]) if (document.activeElement !== $(id)) $(id).value = c.session[key].join("\n");
+
+  // device + pins
+  $("#dev-asleep").style.display = online ? "none" : ""; $("#pins-asleep").style.display = online ? "none" : "";
+  $$("#s-device button, #s-device input, #s-pins button, #s-pins input, #s-pins select").forEach(x => x.disabled = !online);
+  if (st.audio_speaker && document.activeElement !== $("#vol")) setRange("#vol", st.audio_speaker.volume, v => v + "%");
+  if (st.screen && document.activeElement !== $("#bri")) setRange("#bri", st.screen.brightness, v => v + "%");
+  const a = d.antennae;
+  if (a && a.affection !== undefined) {
+    $("#aff").textContent = Math.round(a.affection * 100) + "%"; $("#aff-bar").style.width = a.affection * 100 + "%";
+    kv($("#ant"), [["Касаний с включения", a.touches_since_boot], ["Последнее касание", a.minutes_since_last_touch.toFixed(0) + " мин назад"], ["Трогают сейчас", a.touched_now ? "да ♥" : "нет"], ["Датчики", (a.inputs || []).map(i => `${i.name} (GPIO${i.gpio}): ${i.type === "touch" ? i.raw + " / фон " + i.baseline : i.pressed ? "нажата" : "отпущена"}`).join("<br>") || "—"]]);
+  }
+
+  // firmware
+  kv($("#fw"), [["На устройстве", d.last_ota.version], ["Готова к раздаче", S.ota_firmware || "нет"]]);
+}
+
+function setRange(id, value, fmt) {
+  const el = $(id); if (document.activeElement !== el) el.value = value; $(id + "-v").textContent = fmt(+el.value);
+}
+function bindRange(id, fmt, commit) {
+  const el = $(id); el.oninput = () => $(id + "-v").textContent = fmt(+el.value); el.onchange = () => commit(+el.value);
+}
+bindRange("#vad", v => v + " мс", v => save({vad: {min_silence_ms: v}}));
+bindRange("#idle", v => v + " с", v => save({session: {idle_timeout_s: v}}));
+bindRange("#fill", v => v + " с", v => save({session: {filler_after_s: v}}));
+bindRange("#vol", v => v + "%", v => dev("self.audio_speaker.set_volume", {volume: v}, "Громкость " + v + "%"));
+bindRange("#bri", v => v + "%", v => dev("self.screen.set_brightness", {brightness: v}, "Яркость " + v + "%"));
+bindRange("#ol-temp", v => v, v => save({ollama: {temperature: v}}));
+$("#voice-save").onclick = () => save({session: {greetings: lines("#greet"), fillers: lines("#fillers"), stop_words: lines("#stops").map(s => s.toLowerCase())}}, "Фразы сохранены и озвучены");
+const lines = id => $(id).value.split("\n").map(s => s.trim()).filter(Boolean);
+$("#cl-model").onchange = e => save({claude: {model: e.target.value}});
+$("#cl-cwd").onchange = e => save({claude: {cwd: e.target.value}});
+$("#cl-dev").onchange = e => save({claude: {device_tools: e.target.checked}});
+$("#ol-url").onchange = e => save({ollama: {url: e.target.value}}).then(loadOllama);
+$("#ol-think").onchange = e => save({ollama: {think: e.target.checked}});
+$("#ol-managed").onchange = e => save({ollama: {managed: e.target.checked, managed_models_dir: $("#ol-mdir").value.trim()}},
+  e.target.checked ? "Своя Ollama запущена" : "Своя Ollama выключена").then(() => setTimeout(loadOllama, 4000));
+$("#ol-mdir").onchange = e => { if ($("#ol-managed").checked) save({ollama: {managed_models_dir: e.target.value.trim()}}).then(() => setTimeout(loadOllama, 4000)); };
+$("#ol-dev").onchange = e => save({ollama: {device_tools: e.target.checked}});
+$("#ol-model").onchange = e => save({ollama: {model: e.target.value}}, "Модель: " + e.target.value);
+$("#autostart").onchange = async e => { try { const r = await api("/api/autostart", {enabled: e.target.checked}); toast(r.autostart ? "Сервер будет запускаться с Windows" : "Автозапуск выключен"); } catch (x) { toast(x.message, true); } };
+
+seg("#style-seg", null, v => dev("self.eyes.set_style", {style: v}, v === "circuit" ? "Тема: схема" : "Тема: объективы"));
+seg("#color-seg", null, v => dev("self.eyes.set_color", {color: v}, v === "green" ? "Зелёный люминофор" : "Янтарный люминофор"));
+$("#emos").innerHTML = EMO.map(([k, n]) => `<button data-e="${k}">${n}</button>`).join("");
+$$("#emos button").forEach(b => b.onclick = () => dev("self.eyes.show_emotion", {emotion: b.dataset.e, seconds: 6}));
+
+// servo
+const PINS = [1, 3, 13, 14, 17, 18, 38, 47, 48];
+$("#servo-pin").innerHTML = PINS.map(p => `<option value="${p}" ${p === 47 ? "selected" : ""}>GPIO${p}</option>`).join("");
+const servo = a => { $("#servo-v").textContent = a + "°"; return dev("self.gpio.servo", {pin: +$("#servo-pin").value, angle: +a, min_us: 500, max_us: 2500}); };
+$("#servo").oninput = e => $("#servo-v").textContent = e.target.value + "°";
+$("#servo").onchange = e => servo(e.target.value);
+$$("#s-pins [data-a]").forEach(b => b.onclick = () => { $("#servo").value = b.dataset.a; servo(b.dataset.a); });
+$("#servo-rel").onclick = () => dev("self.gpio.release", {pin: +$("#servo-pin").value}, "Пин отпущен");
+async function loadPins() {
+  const r = await dev("self.gpio.list_pins"); if (!r || !r.pins) return;
+  const MODE = {free: "свободен", output: "выход", input: "вход", pwm: "ШИМ", servo: "серво", antenna: "антенка"};
+  $("#pins").innerHTML = "<tr><th>Вывод</th><th>Режим</th><th class='r'></th></tr>" + r.pins.map(p => `<tr><td class="mono">GPIO${p.gpio}</td><td>${MODE[p.mode] || p.mode}</td><td class="r">${p.mode === "antenna" ? "" : `<button data-hi="${p.gpio}">1</button> <button data-lo="${p.gpio}">0</button> <button data-rd="${p.gpio}">прочитать</button>`}</td></tr>`).join("");
+  $$("#pins [data-hi]").forEach(b => b.onclick = () => dev("self.gpio.write", {pin: +b.dataset.hi, level: 1}, "GPIO" + b.dataset.hi + " = 1").then(loadPins));
+  $$("#pins [data-lo]").forEach(b => b.onclick = () => dev("self.gpio.write", {pin: +b.dataset.lo, level: 0}, "GPIO" + b.dataset.lo + " = 0").then(loadPins));
+  $$("#pins [data-rd]").forEach(b => b.onclick = async () => { const v = await dev("self.gpio.read", {pin: +b.dataset.rd, pull: "up"}); if (v !== undefined) toast("GPIO" + b.dataset.rd + " = " + v); loadPins(); });
+}
+
+// test brain
+$("#test-go").onclick = async () => {
+  const q = $("#test-q").value.trim(); if (!q) return;
+  $("#test-a").textContent = "Думаю…"; $("#test-go").disabled = true;
+  try { const r = await api("/api/brain/test", {text: q}); $("#test-a").textContent = `${r.reply || "(пустой ответ)"}\n\n— ${BRAIN_NAMES[r.brain]}, ${r.seconds} с`; }
+  catch (e) { $("#test-a").textContent = "Ошибка: " + e.message; }
+  $("#test-go").disabled = false;
+};
+$("#test-q").onkeydown = e => { if (e.key === "Enter") $("#test-go").click(); };
+
+async function play(speaker) {
+  try { const r = await api("/api/tts/preview", {speaker, text: $("#tts-text").value}, true); new Audio(URL.createObjectURL(await r.blob())).play(); }
+  catch (e) { toast(e.message, true); }
+}
+
+// ollama
+async function loadOllama() { try { ollama = await api("/api/ollama"); } catch { ollama = {reachable: false, models: []}; } render(); }
+function renderOllamaModels() {
+  const c = S.config.ollama;
+  $("#ol-down").style.display = ollama.reachable ? "none" : ""; $("#ol-url-t").textContent = c.url;
+  const names = ollama.models.map(m => m.name);
+  const opts = (c.model && !names.includes(c.model) ? [`<option value="${c.model}">${c.model} (не скачана)</option>`] : [])
+    .concat(ollama.models.length ? ollama.models.map(m => `<option value="${m.name}">${m.name} · ${m.params || ""} · ${m.size_gb} ГБ</option>`) : [`<option value="">— моделей нет, скачайте справа —</option>`]);
+  if (document.activeElement !== $("#ol-model")) { $("#ol-model").innerHTML = opts.join(""); $("#ol-model").value = c.model; }
+  $("#ol-info").textContent = ollama.reachable ? `Ollama ${ollama.version} · моделей: ${ollama.models.length}` : "";
+  $("#ol-rec").innerHTML = REC.map(([m, d]) => `<button data-m="${m}" title="${d}">${names.includes(m) ? "✓ " : ""}${d}</button>`).join("");
+  $$("#ol-rec button").forEach(b => b.onclick = () => { $("#ol-pull-name").value = b.dataset.m; });
+}
+$("#ol-refresh").onclick = async () => { await loadOllama(); toast(ollama.reachable ? `Моделей в Ollama: ${ollama.models.length}` : "Ollama не отвечает", !ollama.reachable); };
+$("#ol-pull").onclick = async () => {
+  const model = $("#ol-pull-name").value.trim(); if (!model) return;
+  $("#ol-pull").disabled = true; $("#ol-bar").style.width = "0";
+  try {
+    const r = await api("/api/ollama/pull", {model}, true), rd = r.body.getReader(), dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const {value, done} = await rd.read(); if (done) break;
+      buf += dec.decode(value, {stream: true}); const parts = buf.split("\n"); buf = parts.pop();
+      for (const p of parts) { if (!p.trim()) continue; const o = JSON.parse(p);
+        if (o.error) throw new Error(o.error);
+        if (o.total) { $("#ol-bar").style.width = (100 * (o.completed || 0) / o.total) + "%"; $("#ol-pull-st").textContent = `${o.status} · ${((o.completed || 0) / 1e9).toFixed(1)} из ${(o.total / 1e9).toFixed(1)} ГБ`; }
+        else $("#ol-pull-st").textContent = o.status; }
+    }
+    $("#ol-bar").style.width = "100%"; toast("Модель " + model + " скачана"); await loadOllama();
+    if (!S.config.ollama.model) save({ollama: {model}}, "Модель: " + model);
+  } catch (e) { toast(e.message, true); $("#ol-pull-st").textContent = "Ошибка: " + e.message; }
+  $("#ol-pull").disabled = false;
+};
+
+// ---------------- OpenAI-compatible engines ----------------
+$("#oa-preset").innerHTML = OA_PRESETS.map(([id, n]) => `<option value="${id}">${n}</option>`).join("");
+function renderOpenAI() {
+  const o = S.config.openai;
+  $("#oa-preset").value = o.preset;
+  for (const [id, key] of [["#oa-url", "url"], ["#oa-model-t", "model"]]) if (document.activeElement !== $(id)) $(id).value = o[key];
+  if (document.activeElement !== $("#oa-key")) $("#oa-key").value = o.api_key ? "••••••••" : "";
+  $("#oa-temp").value = o.temperature; $("#oa-temp-v").textContent = o.temperature;
+  $("#oa-nothink").checked = o.no_think; $("#oa-dev").checked = o.device_tools;
+  $("#oa-auto").checked = o.autostart;
+  if (document.activeElement !== $("#oa-cmd")) $("#oa-cmd").value = o.start_command || "";
+  $("#oa-down").style.display = oa.reachable === false ? "" : "none";
+  if (document.activeElement !== $("#oa-model")) {
+    const list = oa.models.includes(o.model) || !o.model ? oa.models : [o.model, ...oa.models];
+    $("#oa-model").innerHTML = list.length ? list.map(m => `<option>${m}</option>`).join("") : `<option value="">— нет списка: проверьте подключение —</option>`;
+    $("#oa-model").value = o.model;
+  }
+}
+async function loadOA(url) {
+  $("#oa-st").textContent = "проверяю…";
+  try { oa = await api("/api/openai/models" + (url ? "?url=" + encodeURIComponent(url) : "")); } catch (e) { oa = {reachable: false, error: e.message, models: []}; }
+  $("#oa-st").textContent = oa.reachable ? `на связи, моделей: ${oa.models.length}` : "нет связи";
+  $("#oa-err").textContent = oa.error || "";
+  if (S) renderOpenAI();
+}
+$("#oa-preset").onchange = e => { const p = OA_PRESETS.find(x => x[0] === e.target.value);
+  const ch = {openai: {preset: p[0]}}; if (p[2]) ch.openai.url = p[2]; save(ch, "Движок: " + p[1]).then(() => loadOA()); };
+$("#oa-url").onchange = e => save({openai: {url: e.target.value.trim(), preset: "custom"}}).then(() => loadOA());
+$("#oa-key").onchange = e => { if (!e.target.value.startsWith("••")) save({openai: {api_key: e.target.value.trim()}}, "Ключ сохранён"); };
+$("#oa-model").onchange = e => save({openai: {model: e.target.value}}, "Модель: " + e.target.value);
+$("#oa-model-t").onchange = e => save({openai: {model: e.target.value.trim()}}, "Модель: " + e.target.value);
+// Refresh / test use the address that is in the field right now (and save it if it changed).
+async function refreshOA() {
+  const url = $("#oa-url").value.trim();
+  if (url && url !== S.config.openai.url) await save({openai: {url, preset: "custom"}}, false);
+  await loadOA(url || undefined);
+  toast(oa.reachable ? `Моделей: ${oa.models.length}` : "Движок не отвечает: " + (oa.error || ""), !oa.reachable);
+}
+$("#oa-test").onclick = refreshOA; $("#oa-refresh").onclick = refreshOA;
+$("#oa-url").onkeydown = e => { if (e.key === "Enter") refreshOA(); };
+$("#oa-auto").onchange = e => save({openai: {autostart: e.target.checked}}, e.target.checked ? "Автозапуск движка включён" : "Автозапуск выключен");
+$("#oa-cmd").onchange = e => save({openai: {start_command: e.target.value.trim()}}, "Команда запуска сохранена");
+$("#oa-start").onclick = async () => {
+  $("#oa-start").disabled = true; $("#oa-st").textContent = "запускаю движок…";
+  try { const r = await api("/api/openai/start", {}); toast(r.ok ? "Движок работает: " + r.message : "Не запустился: " + r.message, !r.ok);
+    $("#oa-url").value = r.url; await refresh(); await loadOA(r.url); }
+  catch (e) { toast(e.message, true); }
+  $("#oa-start").disabled = false;
+};
+$("#oa-find").onclick = async () => {
+  $("#oa-found").innerHTML = '<span class="hint">ищу…</span>';
+  const r = await api("/api/openai/discover");
+  $("#oa-found").innerHTML = r.engines.length ? r.engines.map(e => `<button data-u="${e.url}" title="${e.models.join(", ")}">${e.name} · :${e.port} · моделей ${e.models.length}</button>`).join("")
+    : '<span class="hint">Ничего не найдено. Запустите сервер в своём движке (в LM Studio: Developer → Start Server).</span>';
+  $$("#oa-found [data-u]").forEach(b => b.onclick = async () => { $("#oa-url").value = b.dataset.u; await refreshOA();
+    if (oa.models.length && !oa.models.includes(S.config.openai.model)) save({openai: {model: oa.models[0]}}, "Модель: " + oa.models[0]); });
+};
+$("#pc-on").onchange = e => save({pc_tools: {enabled: e.target.checked}}, e.target.checked ? "Локальная модель может открывать программы" : "Действия на ПК выключены");
+$("#pc-ps").onchange = e => { if (e.target.checked && !confirm("Разрешить локальной модели выполнять команды PowerShell по голосу?")) { e.target.checked = false; return; }
+  save({pc_tools: {allow_powershell: e.target.checked}}, e.target.checked ? "PowerShell разрешён" : "PowerShell запрещён"); };
+$("#oa-nothink").onchange = e => save({openai: {no_think: e.target.checked}});
+$("#oa-dev").onchange = e => save({openai: {device_tools: e.target.checked}});
+bindRange("#oa-temp", v => v, v => save({openai: {temperature: v}}));
+
+// ---------------- skins ----------------
+let SK = {active: "", skins: [], palettes: {}}, edSkin = null, edEngine = null, edBg = null, edImage = null;
+const STOP_POS = [0, 0.35, 0.75, 1];
+function stillFrame(canvas, skin, state = "speaking") {
+  const e = new EyesEngine(); e.applySkin(skin); e.decay = 0;
+  e.setState(state); e.setMessage("assistant", "Привет! Я на связи."); e.setLevel(0.6); e.messageShown = 99;
+  for (let i = 0; i < 6; i++) { e.update(0.12); }
+  const ctx = canvas.getContext("2d"), img = ctx.createImageData(SW, SH); e.render(img.data); ctx.putImageData(img, 0, 0);
+}
+const swatch = stops => { const [, c1] = stops[Math.max(0, stops.length - 2)]; return c1; };
+async function loadSkins() {
+  SK = await api("/api/skins");
+  const legacy = SK.active.includes("-") && !SK.skins.some(s => s.id === SK.active);   // old "base-palette" ids
+  const activeId = legacy ? SK.active.split("-")[0] : SK.active;
+  const activePal = legacy ? SK.active.split("-")[1] : SK.active_palette;
+  $("#skin-grid").innerHTML = SK.skins.map(s => {
+    const on = s.id === activeId;
+    const sw = Object.entries(SK.palettes).map(([p, st]) => `<i data-p="${p}" title="${SK.palette_names[p] || p}" style="background:${swatch(st)}" class="${on && activePal === p ? "on" : ""}"></i>`).join("");
+    return `<div class="sk ${on ? "on" : ""}" data-id="${s.id}">
+    ${on ? '<span class="badge">АКТИВЕН</span>' : ""}<canvas width="240" height="240"></canvas>
+    <div class="nm" title="${s.name}">${s.name}</div><div class="ds">${s.desc || (s.builtin ? "" : "свой скин")}</div>
+    <div class="sw">${sw}</div>
+    <div class="act"><button data-apply>Применить</button><button data-edit title="Взять за основу">✎</button>${s.builtin ? "" : '<button data-exp title="Экспорт">⇩</button><button data-del title="Удалить">✕</button>'}</div></div>`;
+  }).join("");
+  $$("#skin-grid .sk").forEach(el => {
+    const s = SK.skins.find(x => x.id === el.dataset.id);
+    const pal = s.id === activeId && activePal && SK.palettes[activePal] ? SK.palettes[activePal] : s.palette;
+    stillFrame(el.querySelector("canvas"), {...s, palette: pal});
+    el.querySelectorAll(".sw i").forEach(i => {
+      i.onmouseenter = () => stillFrame(el.querySelector("canvas"), {...s, palette: SK.palettes[i.dataset.p]});
+      i.onmouseleave = () => stillFrame(el.querySelector("canvas"), {...s, palette: pal});
+      i.onclick = ev => { ev.stopPropagation(); activateSkin(s.id, i.dataset.p); };
+    });
+    el.querySelector("[data-apply]").onclick = ev => { ev.stopPropagation(); activateSkin(s.id); };
+    el.querySelector("[data-edit]").onclick = ev => { ev.stopPropagation(); editFrom(s); };
+    const ex = el.querySelector("[data-exp]"); if (ex) ex.onclick = ev => { ev.stopPropagation(); location.href = `/api/skins/${s.id}/export`; };
+    const del = el.querySelector("[data-del]"); if (del) del.onclick = async ev => { ev.stopPropagation();
+      if (!confirm(`Удалить скин «${s.name}»?`)) return; await fetch(`/api/skins/${s.id}`, {method: "DELETE"}); toast("Скин удалён"); loadSkins(); };
+  });
+  if (!edSkin) editFrom(SK.skins.find(s => s.id === SK.active) || SK.skins[0], true);
+  $("#ed-pal-preset").innerHTML = `<option value="">свои цвета</option>` + Object.keys(SK.palettes).map(p => `<option value="${p}">${p}</option>`).join("");
+}
+async function activateSkin(id, palette) {
+  try { const r = await api(`/api/skins/${id}/activate`, palette ? {palette} : {}); toast(r.applied_now ? "Скин применён на устройстве" : "Скин выбран — устройство возьмёт его при следующем включении или подключении");
+    loadSkins(); } catch (e) { toast(e.message, true); }
+}
+function editFrom(s, quiet) {
+  edSkin = JSON.parse(JSON.stringify(s)); edBg = s.background || null; edImage = null;
+  $("#ed-name").value = s.builtin ? "" : s.name; $("#ed-base").value = s.base;
+  const stops = STOP_POS.map(p => { const lut = new EyesEngine(); lut.applySkin({palette: s.palette}); const i = Math.round(p * 255) * 3;
+    return "#" + [0, 1, 2].map(k => lut.customPal[i + k].toString(16).padStart(2, "0")).join(""); });
+  $("#ed-colors").innerHTML = stops.map((c, i) => `<input type="color" value="${c}" data-i="${i}">`).join("");
+  $$("#ed-colors input").forEach(i => i.oninput = edUpdate);
+  $("#ed-pal-preset").value = "";
+  $("#ed-eyes-on").checked = !!s.eyes; $("#ed-eyes").style.display = s.eyes ? "" : "none";
+  if (s.eyes) { $("#ed-ex").value = (s.eyes.rx - s.eyes.lx) / 2; $("#ed-ey").value = s.eyes.ly; $("#ed-er").value = s.eyes.r; }
+  $("#ed-unit").value = (s.texts && s.texts.unit) || ""; $("#ed-header").value = (s.texts && s.texts.header) || "";
+  edUpdate();
+  if (!quiet) { $("#skin-editor").scrollIntoView({behavior: "smooth"}); toast("Открыт в редакторе: " + s.name); }
+}
+function edCollect() {
+  const cols = $$("#ed-colors input").map(i => i.value);
+  const sk = {name: $("#ed-name").value.trim() || "Мой скин", base: $("#ed-base").value, palette: STOP_POS.map((p, i) => [p, cols[i]])};
+  if ($("#ed-eyes-on").checked) { const d = +$("#ed-ex").value, y = +$("#ed-ey").value; sk.eyes = {lx: 60 - d, ly: y, rx: 60 + d, ry: y, r: +$("#ed-er").value}; }
+  const texts = {}; if ($("#ed-unit").value.trim()) texts.unit = $("#ed-unit").value.trim(); if ($("#ed-header").value.trim()) texts.header = $("#ed-header").value.trim();
+  if (Object.keys(texts).length) sk.texts = texts;
+  return sk;
+}
+function edUpdate() {
+  const sk = edCollect();
+  if (!edEngine) { edEngine = new EyesEngine(); edEngine.setMessage("assistant", "Так будет выглядеть ваш скин."); }
+  edEngine.applySkin(sk);
+  if (edImage) edEngine.bg = edImage.pixels; else if (edBg) edEngine.applySkin({...sk, background: edBg});
+}
+$("#ed-pal-preset").onchange = e => { const p = SK.palettes[e.target.value]; if (!p) return;
+  const eng = new EyesEngine(); eng.applySkin({palette: p});
+  $$("#ed-colors input").forEach((inp, i) => { const k = Math.round(STOP_POS[i] * 255) * 3; inp.value = "#" + [0, 1, 2].map(j => eng.customPal[k + j].toString(16).padStart(2, "0")).join(""); });
+  edUpdate(); };
+["#ed-base", "#ed-ex", "#ed-ey", "#ed-er", "#ed-unit", "#ed-header", "#ed-name"].forEach(id => $(id).oninput = edUpdate);
+$("#ed-eyes-on").onchange = e => { $("#ed-eyes").style.display = e.target.checked ? "" : "none"; edUpdate(); };
+$$("#skin-editor [data-st]").forEach(b => b.onclick = () => { edEngine.setState(b.dataset.st); edEngine.setLevel(b.dataset.st === "speaking" ? 0.6 : 0); });
+// Picture -> 120x120 phosphor layer in the browser (preview); the server does the same for the saved skin.
+function imageToLayer(img, brightness, invert) {
+  const c = document.createElement("canvas"); c.width = c.height = LW; const x = c.getContext("2d");
+  x.fillStyle = "#000"; x.fillRect(0, 0, LW, LW);
+  const s = Math.max(LW / img.width, LW / img.height), w = img.width * s, h = img.height * s;
+  x.drawImage(img, (LW - w) / 2, (LW - h) / 2, w, h);
+  const d = x.getImageData(0, 0, LW, LW).data, g = new Float32Array(LW * LW);
+  let mean = 0; for (let i = 0; i < g.length; i++) { g[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]; mean += g[i]; }
+  mean /= g.length; const inv = invert === "yes" || (invert === "auto" && mean > 140);
+  let lo = 255, hi = 0; for (let i = 0; i < g.length; i++) { if (inv) g[i] = 255 - g[i]; lo = Math.min(lo, g[i]); hi = Math.max(hi, g[i]); }
+  const out = new Uint8Array(LW * LW); for (let i = 0; i < g.length; i++) out[i] = ((g[i] - lo) / Math.max(1, hi - lo)) * 255 * brightness;
+  return out;
+}
+function refreshImage() { if (!edImage) return; edImage.pixels = imageToLayer(edImage.img, +$("#ed-bgb").value, $("#ed-inv").value); edUpdate(); }
+$("#ed-img").onchange = e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
+  rd.onload = () => { const img = new Image(); img.onload = () => { edImage = {img, dataUrl: rd.result}; edBg = null; refreshImage(); }; img.src = rd.result; }; rd.readAsDataURL(f); };
+$("#ed-bgb").oninput = refreshImage; $("#ed-inv").onchange = refreshImage;
+$("#ed-img-clear").onclick = () => { edImage = null; edBg = null; $("#ed-img").value = ""; edUpdate(); };
+async function edSave(apply) {
+  const sk = edCollect();
+  if (edImage) { sk.image = edImage.dataUrl; sk.bg_brightness = +$("#ed-bgb").value; sk.invert = $("#ed-inv").value; }
+  else if (edBg) sk.background = edBg;
+  try { const r = await api("/api/skins", sk); toast("Скин «" + r.skin.name + "» сохранён"); edSkin = r.skin; edBg = r.skin.background || null; edImage = null; $("#ed-img").value = "";
+    if (apply) await activateSkin(r.skin.id); else loadSkins(); } catch (e) { toast(e.message, true); }
+}
+$("#ed-save").onclick = () => edSave(false); $("#ed-save-apply").onclick = () => edSave(true);
+$("#ed-import").onchange = async e => { const f = e.target.files[0]; if (!f) return;
+  try { const sk = JSON.parse(await f.text()); delete sk.id; const r = await api("/api/skins", sk); toast("Импортирован: " + r.skin.name); loadSkins(); } catch (x) { toast("Не удалось импортировать: " + x.message, true); }
+  e.target.value = ""; };
+let edLast = performance.now();
+(function edLoop(now) {
+  if (tab === "skins" && edEngine) { const dt = Math.min(0.05, (now - edLast) / 1000);
+    if (edEngine.state === "speaking") edEngine.setLevel(0.3 + 0.7 * Math.max(0, Math.sin(now / 90) * 0.5 + Math.sin(now / 230) * 0.5));
+    edEngine.update(dt); const ctx = $("#ed-canvas").getContext("2d"), img = ctx.createImageData(SW, SH); edEngine.render(img.data); ctx.putImageData(img, 0, 0); }
+  edLast = now; requestAnimationFrame(edLoop);
+})(performance.now());
+
+// ---------------- characters ----------------
+let PE = {active: "", personas: []};
+async function loadPersonas() {
+  PE = await api("/api/personas");
+  $("#pe-body").textContent = PE.body_rules;
+  $("#pgrid").innerHTML = PE.personas.map(p => `<div class="pc ${p.id === PE.active ? "on" : ""}" data-id="${p.id}">
+    ${p.id === PE.active ? '<span class="badge">ВКЛЮЧЁН</span>' : ""}<b>${p.name}</b><div class="d">${p.desc || ""}</div>
+    ${p.sample ? `<q>${p.sample}</q>` : ""}
+    <div class="act">${p.id === PE.active ? "" : "<button data-use>Включить</button>"}<button data-ed>${p.builtin ? "Взять за основу" : "Изменить"}</button>${p.builtin ? "" : "<button data-del>✕</button>"}</div></div>`).join("");
+  $$("#pgrid .pc").forEach(el => {
+    const p = PE.personas.find(x => x.id === el.dataset.id);
+    const use = el.querySelector("[data-use]"); if (use) use.onclick = ev => { ev.stopPropagation(); usePersona(p.id); };
+    el.querySelector("[data-ed]").onclick = ev => { ev.stopPropagation(); peEdit = p.builtin ? null : p.id;
+      $("#pe-name").value = p.builtin ? p.name + " (мой)" : p.name; $("#pe-prompt").value = p.prompt; $("#pe-sample").value = p.sample || "";
+      $("#pe-name").scrollIntoView({behavior: "smooth", block: "center"}); };
+    const del = el.querySelector("[data-del]"); if (del) del.onclick = async ev => { ev.stopPropagation();
+      if (!confirm(`Удалить характер «${p.name}»?`)) return; await fetch(`/api/personas/${p.id}`, {method: "DELETE"}); toast("Удалён"); loadPersonas(); };
+  });
+}
+let peEdit = null;
+async function usePersona(id) { try { await api(`/api/personas/${id}/activate`, {}); toast("Характер: " + PE.personas.find(p => p.id === id).name); loadPersonas(); } catch (e) { toast(e.message, true); } }
+async function peSave(use) {
+  try { const r = await api("/api/personas", {id: peEdit || undefined, name: $("#pe-name").value, prompt: $("#pe-prompt").value, sample: $("#pe-sample").value});
+    toast("Характер «" + r.persona.name + "» сохранён"); peEdit = r.persona.id; if (use) await usePersona(r.persona.id); else loadPersonas(); }
+  catch (e) { toast(e.message, true); }
+}
+$("#pe-save").onclick = () => peSave(false); $("#pe-save-use").onclick = () => peSave(true);
+$("#pe-clear").onclick = () => { peEdit = null; $("#pe-name").value = ""; $("#pe-prompt").value = ""; $("#pe-sample").value = ""; };
+$("#pe-test").onclick = async () => {
+  const q = $("#pe-q").value.trim(); if (!q) return; $("#pe-a").textContent = "Думаю…"; $("#pe-test").disabled = true;
+  try { const r = await api("/api/brain/test", {text: q}); $("#pe-a").textContent = `${r.reply}\n\n— ${BRAIN_NAMES[r.brain]}, ${r.seconds} с`; }
+  catch (e) { $("#pe-a").textContent = "Ошибка: " + e.message; }
+  $("#pe-test").disabled = false;
+};
+
+// firmware
+$("#fw-up").onclick = async () => {
+  const f = $("#fw-file").files[0]; if (!f) return toast("Выберите файл .bin", true);
+  const fd = new FormData(); fd.append("file", f);
+  try { const r = await fetch("/api/firmware", {method: "POST", body: fd}); if (!r.ok) throw new Error(await r.text()); const j = await r.json(); toast("Прошивка " + j.ota_firmware + " готова к раздаче"); refresh(); }
+  catch (e) { toast(e.message, true); }
+};
+$("#fw-reboot").onclick = () => dev("self.reboot", {}, "Устройство перезагружается");
+
+async function loadLogs() { try { const r = await api("/api/logs?n=400"); const el = $("#log"), atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 20; el.textContent = r.lines.join("\n"); if (atEnd) el.scrollTop = el.scrollHeight; } catch {} }
+
+let wasOnline = false;
+
+// ---------------- hardware profile ----------------
+let HW = null, HWC = null;
+const DPIN = [["mosi", "MOSI / SDA данных"], ["sclk", "SCLK"], ["cs", "CS"], ["dc", "DC"], ["rst", "RST"], ["bl", "Подсветка"], ["sda", "I2C SDA"], ["scl", "I2C SCL"]];
+const OTHER = [["audio", "mic_ws", "Микрофон WS"], ["audio", "mic_sck", "Микрофон SCK"], ["audio", "mic_din", "Микрофон DIN"], ["audio", "spk_dout", "Динамик DOUT"],
+  ["audio", "spk_bclk", "Динамик BCLK"], ["audio", "spk_lrck", "Динамик LRCK"], ["buttons", "boot", "Кнопка BOOT"], ["buttons", "volume_up", "Громкость +"],
+  ["buttons", "volume_down", "Громкость −"], ["power", "latch", "Удержание питания"], ["power", "charge_detect", "Датчик зарядки"]];
+const CAMP = ["d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "xclk", "pclk", "vsync", "href", "sda", "scl", "pwdn", "reset"];
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const pinBox = (id, label, v) => `<div style="width:108px"><label class="f">${label}</label><input type="number" min="-1" max="48" id="${id}" value="${v}"></div>`;
+
+async function loadHw() {
+  try { const r = await api("/api/hardware"); HW = r.hardware; HWC = r.catalog; renderHw(); }
+  catch (e) { toast(e.message, true); }
+}
+function actSel(cls, i, v) {
+  return `<select class="${cls}" data-i="${i}" style="min-width:150px">` + Object.entries(HWC.actions).map(([k, n]) => `<option value="${k}"${k === v ? " selected" : ""}>${esc(n)}</option>`).join("") + "</select>";
+}
+function gestureCell(inp, i, g) {
+  const [a, b] = (inp[g] || "none").split(",");
+  return `<td>${actSel("in-" + g, i, a)}<br>${actSel("in-" + g + "2", i, b || "none")}</td>`;
+}
+function renderHw() {
+  if (!HW) return;
+  const d = HW.display;
+  $("#hw-preset").innerHTML = `<option value="">— свой —</option>` + Object.entries(HWC.presets).map(([k, p]) => `<option value="${k}"${k === d.preset ? " selected" : ""}>${esc(p.label)}</option>`).join("");
+  $("#hw-driver").innerHTML = Object.entries(HWC.drivers).map(([k, p]) => `<option value="${k}"${k === d.driver ? " selected" : ""}>${esc(p.label)}</option>`).join("");
+  $("#hw-w").value = d.width; $("#hw-h").value = d.height; $("#hw-ox").value = d.offset_x; $("#hw-oy").value = d.offset_y;
+  $("#hw-mhz").value = d.pclk_mhz; $("#hw-mode").value = d.spi_mode;
+  $("#hw-mx").checked = d.mirror_x; $("#hw-my").checked = d.mirror_y; $("#hw-sw").checked = d.swap_xy; $("#hw-inv").checked = d.invert;
+  $("#hw-bgr").checked = d.rgb_order === "bgr"; $("#hw-bli").checked = d.bl_invert;
+  const bus = HWC.drivers[d.driver].bus;
+  $("#hw-dpins").innerHTML = DPIN.filter(([k]) => bus === "i2c" ? ["sda", "scl", "rst"].includes(k) : !["sda", "scl"].includes(k))
+    .map(([k, n]) => pinBox("dp-" + k, n, d.pins[k])).join("") + (bus === "i2c" ? `<div style="width:108px"><label class="f">Адрес I2C</label><input type="number" id="dp-addr" value="${d.i2c_addr}"></div>` : "");
+  $("#hw-bus-hint").textContent = bus === "i2c" ? "OLED по I2C: монохромный экран, вместо анимированных глаз — простой интерфейс." : bus === "spi" ? "Цветной SPI-экран: глаза рисуются 240×240 и центрируются (на меньших экранах — уменьшаются). -1 = не подключено." : "";
+  $("#hw-inputs").innerHTML = `<tr><th>Имя</th><th>Тип</th><th>GPIO</th><th>Чувствит., %</th><th>Касание</th><th>Двойное</th><th>Удержание</th><th></th></tr>` +
+    HW.inputs.map((inp, i) => `<tr><td><input type="text" class="in-name" data-i="${i}" value="${esc(inp.name)}" style="min-width:120px"></td>
+      <td><select class="in-type" data-i="${i}"><option value="touch"${inp.type === "touch" ? " selected" : ""}>сенсор</option><option value="button"${inp.type === "button" ? " selected" : ""}>кнопка</option></select></td>
+      <td><input type="number" class="in-pin" data-i="${i}" value="${inp.pin}" style="width:64px"></td>
+      <td><input type="number" class="in-sens" data-i="${i}" value="${inp.sensitivity}" style="width:64px" ${inp.type === "touch" ? "" : "disabled"}></td>
+      ${gestureCell(inp, i, "tap")}${gestureCell(inp, i, "double")}${gestureCell(inp, i, "hold")}
+      <td><button class="in-del" data-i="${i}">✕</button></td></tr>`).join("");
+  $("#hw-outputs").innerHTML = `<tr><th>Имя</th><th>Тип</th><th>GPIO</th><th>Активный 0</th><th></th></tr>` +
+    HW.outputs.map((o, i) => `<tr><td><input type="text" class="out-name" data-i="${i}" value="${esc(o.name)}"></td>
+      <td><select class="out-type" data-i="${i}">${Object.entries(HWC.output_types).map(([k, n]) => `<option value="${k}"${k === o.type ? " selected" : ""}>${n}</option>`).join("")}</select></td>
+      <td><input type="number" class="out-pin" data-i="${i}" value="${o.pin}" style="width:64px"></td>
+      <td><input type="checkbox" class="out-low" data-i="${i}"${o.active_low ? " checked" : ""}></td>
+      <td><button class="out-test" data-i="${i}">Проверить</button> <button class="out-del" data-i="${i}">✕</button></td></tr>`).join("");
+  $("#hw-other").innerHTML = OTHER.map(([g, k, n]) => pinBox(`o-${g}-${k}`, n, HW[g][k])).join("");
+  $("#cam-pins").innerHTML = CAMP.map(k => pinBox("cp-" + k, k.toUpperCase(), HW.camera.pins[k])).join("");
+  $$(".in-del").forEach(b => b.onclick = () => { collectHw(); HW.inputs.splice(+b.dataset.i, 1); renderHw(); });
+  $$(".out-del").forEach(b => b.onclick = () => { collectHw(); HW.outputs.splice(+b.dataset.i, 1); renderHw(); });
+  $$(".in-type").forEach(s => s.onchange = () => { collectHw(); renderHw(); });
+  $$(".out-test").forEach(b => b.onclick = () => dev("self.outputs.set", {name: HW.outputs[+b.dataset.i].name, state: "pulse", ms: 400}, "Импульс отправлен"));
+}
+function collectHw() {
+  const d = HW.display, n = id => +$(id).value;
+  d.driver = $("#hw-driver").value; d.preset = $("#hw-preset").value;
+  d.width = n("#hw-w"); d.height = n("#hw-h"); d.offset_x = n("#hw-ox"); d.offset_y = n("#hw-oy"); d.pclk_mhz = n("#hw-mhz"); d.spi_mode = n("#hw-mode");
+  d.mirror_x = $("#hw-mx").checked; d.mirror_y = $("#hw-my").checked; d.swap_xy = $("#hw-sw").checked; d.invert = $("#hw-inv").checked;
+  d.rgb_order = $("#hw-bgr").checked ? "bgr" : "rgb"; d.bl_invert = $("#hw-bli").checked;
+  DPIN.forEach(([k]) => { if ($("#dp-" + k)) d.pins[k] = n("#dp-" + k); });
+  if ($("#dp-addr")) d.i2c_addr = n("#dp-addr");
+  const val = (cls, i) => $(`.${cls}[data-i="${i}"]`);
+  HW.inputs = HW.inputs.map((_, i) => {
+    const g = k => [val("in-" + k, i).value, val("in-" + k + "2", i).value].filter(a => a && a !== "none").filter((a, j, arr) => arr.indexOf(a) === j).join(",") || "none";
+    return {name: val("in-name", i).value, type: val("in-type", i).value, pin: +val("in-pin", i).value, sensitivity: +val("in-sens", i).value || 4,
+      tap: g("tap"), double: g("double"), hold: g("hold")};
+  });
+  HW.outputs = HW.outputs.map((_, i) => ({name: val("out-name", i).value, type: val("out-type", i).value, pin: +val("out-pin", i).value, active_low: val("out-low", i).checked}));
+  OTHER.forEach(([g, k]) => HW[g][k] = n(`#o-${g}-${k}`));
+  CAMP.forEach(k => HW.camera.pins[k] = n("#cp-" + k));
+}
+async function saveHw() {
+  collectHw();
+  try {
+    const r = await api("/api/hardware", {hardware: HW}); HW = r.hardware; renderHw();
+    $("#hw-res").style.display = ""; $("#hw-res").textContent = "Сохранено. " + r.applied; toast("Профиль железа сохранён");
+  } catch (e) { $("#hw-res").style.display = ""; $("#hw-res").textContent = "Ошибка: " + e.message; toast(e.message, true); }
+}
+$("#hw-save").onclick = saveHw;
+$("#hw-preset").onchange = () => {
+  collectHw(); const p = HWC.presets[$("#hw-preset").value]; if (!p) return;
+  const d = HW.display; Object.assign(d, {mirror_x: false, mirror_y: false, swap_xy: false, invert: false, rgb_order: "rgb", pclk_mhz: HWC.drivers[p.driver].bus === "spi" ? 40 : d.pclk_mhz}, p, {preset: $("#hw-preset").value});
+  delete d.label; renderHw();
+};
+$("#hw-driver").onchange = () => { collectHw(); HW.display.preset = ""; renderHw(); };
+$("#hw-in-add").onclick = () => { collectHw(); HW.inputs.push({name: "Вход " + (HW.inputs.length + 1), type: "button", pin: -1, sensitivity: 4, tap: "wake", double: "none", hold: "listen"}); renderHw(); };
+$("#hw-out-add").onclick = () => { collectHw(); HW.outputs.push({name: "Вибро", type: "vibration", pin: -1, active_low: false}); renderHw(); };
+$("#hw-reset").onclick = async () => { if (!confirm("Вернуть заводской профиль платы zhengchen 1.54?")) return; const r = await api("/api/hardware/reset", {}); HW = r.hardware; renderHw(); toast("Заводские настройки — нажмите «Сохранить и применить»"); };
+$("#hw-export").onclick = () => { collectHw(); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(HW, null, 2)], {type: "application/json"})); a.download = "hardware.json"; a.click(); };
+$("#hw-import").onchange = async e => { const f = e.target.files[0]; if (!f) return; try { HW = JSON.parse(await f.text()); renderHw(); toast("Профиль загружен — проверьте и сохраните"); } catch (_) { toast("Это не JSON-профиль", true); } };
+$("#disc-on").onchange = e => save({server: {discovery: e.target.checked}}, e.target.checked ? "Автопоиск включён" : "Автопоиск выключен");
+
+// ---------------- music ----------------
+function renderMusic() {
+  const m = S.config.music;
+  $("#mu-on").checked = m.enabled;
+  seg("#mu-src", m.default_source, v => save({music: {default_source: v}}, "Источник по умолчанию изменён"));
+  $("#mu-vol").value = m.volume; $("#mu-vol-v").textContent = Math.round(m.volume * 100) + "%";
+  $("#mu-br").value = String(m.bitrate);
+  if (document.activeElement !== $("#mu-ya")) $("#mu-ya").value = m.yandex_token ? "••••••••" : "";
+  if (document.activeElement !== $("#mu-ls")) $("#mu-ls").value = m.librespot_path;
+  if (document.activeElement !== $("#mu-sn")) $("#mu-sn").value = m.spotify_name;
+}
+$("#mu-on").onchange = e => save({music: {enabled: e.target.checked}});
+$("#mu-vol").oninput = e => $("#mu-vol-v").textContent = Math.round(e.target.value * 100) + "%";
+$("#mu-vol").onchange = e => save({music: {volume: +e.target.value}}, false);
+$("#mu-br").onchange = e => save({music: {bitrate: +e.target.value}});
+$("#mu-ya").onchange = e => { if (!e.target.value.startsWith("••")) save({music: {yandex_token: e.target.value.trim()}}, "Токен сохранён"); };
+$("#mu-ls").onchange = e => save({music: {librespot_path: e.target.value.trim()}});
+$("#mu-sn").onchange = e => save({music: {spotify_name: e.target.value.trim() || "ClaudeVoice"}});
+async function tool(name, args = {}) {
+  try { const r = await api("/api/tools/call", {name, arguments: args}); $("#mu-st").textContent = r.result; return r.result; }
+  catch (e) { toast(e.message, true); }
+}
+$("#mu-play").onclick = () => tool("music_play", {query: $("#mu-q").value.trim() || "Европа Плюс", source: $("#mu-qsrc").value});
+$("#mu-next").onclick = () => tool("music_next");
+$("#mu-stop").onclick = () => tool("music_stop");
+
+// ---------------- camera ----------------
+function renderCamera() {
+  const c = S.config.camera;
+  seg("#cam-src", c.source, async v => {
+    await save({camera: {source: v}}, "Источник камеры: " + {none: "нет", esp32cam: "ESP32-CAM", pc: "камера ПК", board: "модуль на плате"}[v]);
+    if (HW) { collectHw(); HW.camera.type = v; }   // the firmware needs to know about a board camera
+  });
+  $("#cam-esp").style.display = c.source === "esp32cam" ? "" : "none";
+  $("#cam-pc").style.display = c.source === "pc" ? "" : "none";
+  $("#cam-board").style.display = c.source === "board" ? "" : "none";
+  if (document.activeElement !== $("#cam-url")) $("#cam-url").value = c.esp32cam_url;
+  if (document.activeElement !== $("#cam-ip")) $("#cam-ip").value = c.pc_device.includes("://") ? c.pc_device : "";
+  if (document.activeElement !== $("#cam-vm")) $("#cam-vm").value = c.vision_model;
+}
+async function scanCams() {
+  const r = await api("/api/camera/list"); const cur = S.config.camera.pc_device;
+  $("#cam-dev").innerHTML = `<option value="">— первая найденная —</option>` + r.pc.map(n => `<option${n === cur ? " selected" : ""}>${esc(n)}</option>`).join("");
+}
+$("#cam-scan").onclick = scanCams;
+$("#cam-dev").onchange = e => save({camera: {pc_device: e.target.value}}, "Камера выбрана");
+$("#cam-ip").onchange = e => save({camera: {pc_device: e.target.value.trim()}}, "Адрес камеры сохранён");
+$("#cam-url").onchange = e => save({camera: {esp32cam_url: e.target.value.trim()}}, "Адрес ESP32-CAM сохранён");
+$("#cam-vm").onchange = e => save({camera: {vision_model: e.target.value.trim()}}, "Модель зрения сохранена");
+$("#cam-pins-save").onclick = async () => { if (!HW) await loadHw(); collectHw(); HW.camera.type = "board"; await saveHw(); };
+$("#cam-snap").onclick = async () => {
+  $("#cam-snap").disabled = true;
+  try { const r = await fetch("/api/camera/snapshot"); if (!r.ok) throw new Error(await r.text());
+    $("#cam-img").src = URL.createObjectURL(await r.blob()); $("#cam-img").style.display = ""; }
+  catch (e) { toast(e.message, true); }
+  $("#cam-snap").disabled = false;
+};
+function renderDiscovery() {
+  $("#disc-on").checked = S.config.server.discovery;
+  const di = S.server.discovery || {};
+  kv($("#disc"), [["Адрес ПК для устройства", S.server.ota_url], ["Последний поиск", di.time ? ago(di.time) + " · " + (di.ip || "") : "ещё не было"],
+    ["Устройство", di.device || "—"], ["Привязано к этому ПК", di.time ? (di.paired ? "да" : "привяжется сейчас") : "—"]]);
+}
+
+async function refresh() {
+  try {
+    const st = await api("/api/state" + (["overview", "device", "pins"].includes(tab) ? "?device=1" : ""));
+    $("#loading").style.display = st.loading ? "" : "none";
+    $$("main section").forEach(s => s.style.opacity = st.loading ? 0.35 : 1);
+    if (st.loading) { $("#loading-stage").textContent = st.stage; pill("#p-server", "warn", "загрузка: " + st.stage); return; }
+    const wasLoading = !S; S = st;
+    render();
+    if (wasLoading) { loadOllama(); if (tab === "skins") loadSkins(); if (tab === "persona") loadPersonas(); }
+    if (S.device.connected && !wasOnline && tab === "pins") loadPins();
+    wasOnline = S.device.connected;
+  } catch { pill("#p-server", "bad", "сервер недоступен"); }
+}
+setInterval(refresh, 3000);
+setInterval(() => { if (tab === "logs") loadLogs(); }, 2000);
+$$("#nav a").find(a => a.dataset.s === "pins").addEventListener("click", () => setTimeout(loadPins, 300));
+refresh(); loadOllama();
+</script>
+</body>
+</html>

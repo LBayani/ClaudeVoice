@@ -1,0 +1,32 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+config.yaml
+models/
+logs/
+
+build_exe/
+.appdata/
+
+
+# Personal settings and secrets (tokens, API keys, local paths) - never publish
+settings.json
+hardware.json
+# Built artifacts
+ota/*.bin
+ClaudeVoice.exe
+# Local firmware source tree (rebuilt by firmware/build.ps1 from upstream + claudevoice.patch)
+firmware/xiaozhi-esp32/
+# Your own characters and skins (created in the app)
+personas/*.json
+skins/*.json
+# Tool caches
+.claude/

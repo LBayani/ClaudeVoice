@@ -1,0 +1,45 @@
+# ClaudeVoice config. Copy to config.yaml and adjust. Settings changed in the app go to settings.json.
+server:
+  host: 0.0.0.0
+  port: 8765
+  public_host: ""             # empty = detect this PC's LAN IP automatically
+  token: ""                   # empty = a random token is generated on first start
+
+asr:
+  model: large-v3-turbo
+  device: cuda
+  compute_type: float16
+  language: ru
+
+tts:
+  speaker: xenia              # aidar, baya, kseniya, xenia, eugene
+  sample_rate: 24000
+  device: cuda
+
+vad:
+  min_silence_ms: 700         # pause that ends your phrase
+
+session:
+  idle_timeout_s: 20          # silence before the device goes back to wake-word mode
+  greetings: ["Слушаю.", "Да?", "Говори."]
+
+brain: claude                 # echo = test mode (repeats you); claude = Claude Code
+
+claude:
+  cwd: "%USERPROFILE%"        # folder Claude works in
+  model: ""                   # empty = your Claude Code default; e.g. sonnet for faster answers
+  # Tools Claude may use on its own. Voice mode can't ask you, anything else is refused.
+  permission_mode: acceptEdits
+  allowed_tools: [Read, Glob, Grep, WebSearch, WebFetch, Bash, PowerShell, Edit, Write, NotebookEdit]
+  # Hard blocks for the worst cases. Other risky actions: Claude asks "да?" by voice first.
+  disallowed_tools:
+    - "Bash(rm -rf:*)"
+    - "Bash(format:*)"
+    - "Bash(shutdown:*)"
+    - "PowerShell(Format-Volume:*)"
+    - "PowerShell(Clear-Disk:*)"
+    - "PowerShell(Stop-Computer:*)"
+    - "PowerShell(Restart-Computer:*)"
+    - "PowerShell(Remove-Item * -Recurse*)"
+  new_conversation_after_min: 30
+  extra_args: ["--strict-mcp-config"]   # skip MCP servers: ~2.5 s faster start

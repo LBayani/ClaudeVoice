@@ -1,0 +1,3506 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 652c682..eb94cf8 100755
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -9,5 +9,5 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+ # "Trim" the build. Include the minimal set of components, main, and anything it depends on.
+ idf_build_set_property(MINIMAL_BUILD ON)
+ 
+-set(PROJECT_VER "2.2.4")
++set(PROJECT_VER "2.4.0")
+ project(xiaozhi)
+diff --git a/main/CMakeLists.txt b/main/CMakeLists.txt
+index ebb2139..7f32cd7 100644
+--- a/main/CMakeLists.txt
++++ b/main/CMakeLists.txt
+@@ -33,6 +33,7 @@ set(SOURCES "audio/audio_codec.cc"
+             "system_info.cc"
+             "application.cc"
+             "ota.cc"
++            "cv_discovery.cc"
+             "settings.cc"
+             "device_state_machine.cc"
+             "assets.cc"
+@@ -903,6 +904,11 @@ idf_component_register(SRCS ${SOURCES}
+                         esp_driver_spi
+                         esp_driver_i2c
+                         esp_driver_i2s
++                        esp_driver_ledc
++                        esp_driver_touch_sens
++                        esp_adc
++                        mbedtls
++                        json
+                         esp_driver_jpeg
+                         esp_driver_ppa
+                         esp_app_format
+diff --git a/main/application.cc b/main/application.cc
+index d69d43d..aea72a7 100644
+--- a/main/application.cc
++++ b/main/application.cc
+@@ -1,4 +1,5 @@
+ #include "application.h"
++#include "cv_discovery.h"
+ #include "board.h"
+ #include "display.h"
+ #include "system_info.h"
+@@ -406,6 +407,11 @@ void Application::CheckNewVersion() {
+         display->SetStatus(Lang::Strings::CHECKING_NEW_VERSION);
+ 
+         esp_err_t err = ota_->CheckVersion();
++        if (err != ESP_OK && cv_discovery::RediscoverChanged()) {
++            // The server moved to another IP (or this is a fresh device): found it on the LAN, retry at once.
++            ESP_LOGI(TAG, "server found at %s, retrying", ota_->GetCheckVersionUrl().c_str());
++            err = ota_->CheckVersion();
++        }
+         if (err != ESP_OK) {
+             retry_count++;
+             if (retry_count >= MAX_RETRY) {
+diff --git a/main/audio/audio_service.cc b/main/audio/audio_service.cc
+index 350ac58..231d40a 100644
+--- a/main/audio/audio_service.cc
++++ b/main/audio/audio_service.cc
+@@ -1,5 +1,7 @@
+ #include "audio_service.h"
++#include "cv_audio_level.h"
+ #include <esp_log.h>
++#include <esp_timer.h>
+ #include <cstring>
+ 
+ #define RATE_CVT_CFG(_src_rate, _dest_rate, _channel)        \
+@@ -214,6 +216,8 @@ bool AudioService::ReadAudioData(std::vector<int16_t>& data, int sample_rate, in
+ 
+     /* Update the last input time */
+     last_input_time_ = std::chrono::steady_clock::now();
++    cv::g_mic_level.store(cv::PcmLevel(data.data(), data.size()), std::memory_order_relaxed);
++    cv::g_mic_time_us.store(esp_timer_get_time(), std::memory_order_relaxed);
+     debug_statistics_.input_count++;
+ 
+ #if CONFIG_USE_AUDIO_DEBUGGER
+@@ -306,6 +310,8 @@ void AudioService::AudioOutputTask() {
+             codec_->EnableOutput(true);
+         }
+ 
++        cv::g_spk_level.store(cv::PcmLevel(task->pcm.data(), task->pcm.size()), std::memory_order_relaxed);
++        cv::g_spk_time_us.store(esp_timer_get_time(), std::memory_order_relaxed);
+         codec_->OutputData(task->pcm);
+ 
+         /* Update the last output time */
+diff --git a/main/boards/zhengchen-1.54tft-wifi/config.json b/main/boards/zhengchen-1.54tft-wifi/config.json
+index 3c17d11..9df9692 100644
+--- a/main/boards/zhengchen-1.54tft-wifi/config.json
++++ b/main/boards/zhengchen-1.54tft-wifi/config.json
+@@ -3,7 +3,10 @@
+     "builds": [
+         {
+             "name": "zhengchen-1.54tft-wifi",
+-            "sdkconfig_append": []
++            "sdkconfig_append": [
++                "CONFIG_OTA_URL=\"http://claudevoice.local:8765/xiaozhi/ota/\"",
++                "CONFIG_LANGUAGE_RU_RU=y"
++            ]
+         }
+     ]
+ }
+\ No newline at end of file
+diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_eyes.cc b/main/boards/zhengchen-1.54tft-wifi/cv_eyes.cc
+new file mode 100644
+index 0000000..309ee78
+--- /dev/null
++++ b/main/boards/zhengchen-1.54tft-wifi/cv_eyes.cc
+@@ -0,0 +1,716 @@
++#include "cv_eyes.h"
++#include "cv_font.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <esp_heap_caps.h>
++
++namespace cv {
++
++namespace {
++constexpr float kPi = 3.14159265f;
++inline float clampf(float v, float a, float b) { return v < a ? a : (v > b ? b : v); }
++inline float lerpf(float a, float b, float t) { return a + (b - a) * t; }
++inline float approach(float cur, float target, float rate, float dt) {
++    return cur + (target - cur) * (1.0f - expf(-rate * dt));
++}
++inline float fract(float v) { return v - floorf(v); }
++
++const char32_t* StatusText(EyeState s) {
++    switch (s) {
++        case EyeState::Idle: return U"ГОТОВ";
++        case EyeState::Listening: return U"СЛУШАЮ";
++        case EyeState::Thinking: return U"ОБРАБОТКА";
++        case EyeState::Speaking: return U"ГОВОРЮ";
++        case EyeState::Connecting: return U"СОЕДИНЕНИЕ";
++        case EyeState::Error: return U"НЕТ СВЯЗИ";
++        case EyeState::Sleep: return U"ОЖИДАНИЕ";
++    }
++    return U"";
++}
++
++const uint8_t* Glyph(char32_t c) {
++    int lo = 0, hi = CV_FONT_COUNT - 1;
++    while (lo <= hi) {
++        int mid = (lo + hi) / 2;
++        if (cv_font_codes[mid] == c) return cv_font_bits[mid];
++        if (cv_font_codes[mid] < c) lo = mid + 1; else hi = mid - 1;
++    }
++    return c == U'?' ? nullptr : Glyph(U'?');
++}
++}  // namespace
++
++std::u32string Utf8ToU32(const std::string& s) {
++    std::u32string out;
++    out.reserve(s.size());
++    for (size_t i = 0; i < s.size();) {
++        uint8_t c = s[i];
++        char32_t cp;
++        int n;
++        if (c < 0x80) { cp = c; n = 1; }
++        else if ((c >> 5) == 6) { cp = c & 0x1f; n = 2; }
++        else if ((c >> 4) == 14) { cp = c & 0x0f; n = 3; }
++        else if ((c >> 3) == 30) { cp = c & 0x07; n = 4; }
++        else { i++; continue; }
++        if (i + n > s.size()) break;
++        for (int k = 1; k < n; k++) cp = (cp << 6) | (s[i + k] & 0x3f);
++        i += n;
++        out.push_back(cp);
++    }
++    return out;
++}
++
++Eyes::Eyes() {
++    // 14 KB phosphor layer is read 4x per output pixel: keep it in fast internal RAM.
++    phos_ = (uint8_t*)heap_caps_calloc(LW * LH, 1, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
++    if (!phos_) phos_ = (uint8_t*)heap_caps_calloc(LW * LH, 1, MALLOC_CAP_SPIRAM);
++    for (int i = 0; i < SW; i++) {
++        const float d = (i - SW / 2.0f) / (SW / 2.0f), d2 = d * d;
++        const float f = clampf(1.02f - 0.08f * d2 * d2 - 0.03f * d2, 0, 1);   // separable vignette
++        colf_[i] = (uint8_t)(f * 255);
++        rowf_[i] = (uint8_t)(f * 255);
++    }
++    BuildPalettes();
++}
++
++Eyes::~Eyes() {
++    heap_caps_free(phos_);
++    heap_caps_free(circuit_);
++    heap_caps_free(bg_);
++}
++
++void Eyes::ApplySkin(const Skin& s) {
++    style_ = s.style;
++    has_custom_pal_ = s.has_palette;
++    if (s.has_palette) memcpy(custom_pal_, s.palette, sizeof(custom_pal_));
++    if (s.background.size() == (size_t)(LW * LH)) {
++        if (!bg_) bg_ = (uint8_t*)heap_caps_malloc(LW * LH, MALLOC_CAP_SPIRAM);
++        if (bg_) memcpy(bg_, s.background.data(), LW * LH);
++    } else if (bg_) {
++        heap_caps_free(bg_);
++        bg_ = nullptr;
++    }
++    has_fx_ = s.has_fx;
++    skin_fx_ = s.fx;
++    skin_eyes_ = s.has_eyes;
++    sk_lx_ = s.lx; sk_ly_ = s.ly; sk_rx_ = s.rx; sk_ry_ = s.ry; sk_r_ = s.r;
++    unit_ = s.unit.empty() ? std::u32string(U"UNIT-07") : Utf8ToU32(s.unit);
++    header_ = s.header.empty() ? std::u32string(U"VOICE INTERFACE") : Utf8ToU32(s.header);
++    glitch_ = 0.3f;   // a little CRT hiccup when the skin changes
++}
++
++inline void Eyes::PutText(int x, int y, uint8_t v) {
++    if (!out_ || x < 0 || y < 0 || x >= SW || y >= SH) return;
++    int c = ((v * colk_[x]) >> 8) * rowk_[y] >> 8;
++    out_[y * SW + x] = cur_pal_[c > 255 ? 255 : c];
++}
++
++void Eyes::BuildPalettes() {
++    for (int i = 0; i < 256; i++) {
++        float f = i / 255.0f;
++        float rgb[3][3] = {
++            // amber
++            {255 * powf(f, 0.55f), 175 * powf(f, 0.95f) + 70 * powf(f, 6), 30 * f * f + 150 * powf(f, 6)},
++            // green
++            {40 * f * f + 200 * powf(f, 6), 255 * powf(f, 0.75f), 80 * f * f + 170 * powf(f, 6)},
++            // red (error)
++            {255 * powf(f, 0.7f), 70 * f * f + 160 * powf(f, 6), 40 * f * f + 120 * powf(f, 6)},
++        };
++        for (int p = 0; p < 3; p++) {
++            int r = (int)clampf(rgb[p][0], 0, 255), g = (int)clampf(rgb[p][1], 0, 255), b = (int)clampf(rgb[p][2], 0, 255);
++            pal_[p][i] = (uint16_t)(((r & 0xf8) << 8) | ((g & 0xfc) << 3) | (b >> 3));
++        }
++    }
++}
++
++uint32_t Eyes::Rand() {
++    rng_ ^= rng_ << 13; rng_ ^= rng_ >> 17; rng_ ^= rng_ << 5;
++    return rng_;
++}
++float Eyes::Rnd(float a, float b) { return a + (Rand() & 0xffffff) / 16777216.0f * (b - a); }
++
++void Eyes::SetState(EyeState s) {
++    if (s == state_) return;
++    state_ = s;
++    state_t_ = 0;
++    glitch_ = 0.18f;
++    next_saccade_ = 0;
++    if (s == EyeState::Listening || s == EyeState::Error) blink_phase_ = 0;
++}
++
++void Eyes::SetEmotion(Emotion e) { emotion_ = e; emotion_t_ = 0; }
++
++void Eyes::SetMessage(Role role, const std::string& utf8) {
++    role_ = role;
++    message_ = Utf8ToU32(utf8);
++    message_shown_ = 0;
++}
++
++void Eyes::SetNotification(const std::string& utf8, float seconds) {
++    notification_ = Utf8ToU32(utf8);
++    notification_left_ = seconds;
++}
++
++void Eyes::SetLevel(float v) { level_target_ = clampf(v, 0, 1); }
++
++void Eyes::Update(float dt) {
++    t_ += dt; state_t_ += dt; emotion_t_ += dt;
++    const EyeState s = state_;
++
++    next_saccade_ -= dt;
++    if (next_saccade_ <= 0) {
++        switch (s) {
++            case EyeState::Listening: tgx_ = Rnd(-0.12f, 0.12f); tgy_ = Rnd(-0.08f, 0.1f); next_saccade_ = Rnd(0.8f, 2.0f); break;
++            case EyeState::Thinking:
++                tgx_ = Rnd(0.35f, 0.75f) * ((Rand() & 1023) < 716 ? 1 : -1); tgy_ = Rnd(-0.75f, -0.35f);
++                next_saccade_ = Rnd(0.5f, 1.4f); break;
++            case EyeState::Speaking: tgx_ = Rnd(-0.25f, 0.25f); tgy_ = Rnd(-0.1f, 0.15f); next_saccade_ = Rnd(0.6f, 1.8f); break;
++            case EyeState::Sleep: tgx_ = 0; tgy_ = 0.3f; next_saccade_ = 3; break;
++            case EyeState::Connecting: tgx_ = 0; tgy_ = 0; next_saccade_ = 1; break;
++            default: {
++                bool far = (Rand() & 1023) < 256;
++                tgx_ = far ? Rnd(-0.9f, 0.9f) : Rnd(-0.35f, 0.35f);
++                tgy_ = far ? Rnd(-0.6f, 0.6f) : Rnd(-0.2f, 0.25f);
++                next_saccade_ = Rnd(1.2f, 4.0f);
++            }
++        }
++    }
++    gx_ = approach(gx_, tgx_, 28, dt);
++    gy_ = approach(gy_, tgy_, 28, dt);
++    next_micro_ -= dt;
++    if (next_micro_ <= 0) { mx_ = Rnd(-0.04f, 0.04f); my_ = Rnd(-0.03f, 0.03f); next_micro_ = Rnd(0.25f, 0.7f); }
++
++    next_blink_ -= dt;
++    if (blink_phase_ < 0 && next_blink_ <= 0 && s != EyeState::Sleep) {
++        blink_phase_ = 0;
++        double_blink_ = (Rand() & 1023) < 184;
++    }
++    if (blink_phase_ >= 0) {
++        blink_phase_ += dt;
++        const float p = blink_phase_, c = 0.07f, h = 0.04f, o = 0.13f;
++        blink_ = p < c ? p / c : p < c + h ? 1 : p < c + h + o ? 1 - (p - c - h) / o : 0;
++        if (p >= c + h + o) {
++            blink_phase_ = -1; blink_ = 0;
++            if (double_blink_) { double_blink_ = false; next_blink_ = 0.12f; }
++            else next_blink_ = s == EyeState::Listening ? Rnd(3, 6) : Rnd(2, 6.5f);
++        }
++    }
++
++    level_ = approach(level_, level_target_, level_target_ > level_ ? 30 : 9, dt);
++
++    float pupilT = 0.55f, openU = 0.9f, openL = 0.72f, rotSpeed = 0.25f, bright = 0.9f, tilt = 0, happy = 0, tiltR = 0;
++    switch (s) {
++        case EyeState::Listening: pupilT = 0.85f + 0.15f * level_; openU = 1.02f; openL = 0.8f; rotSpeed = 0.5f; bright = 1; tiltR = 0.06f; break;
++        case EyeState::Thinking: pupilT = 0.38f + 0.08f * sinf(t_ * 6); openU = 0.78f; openL = 0.66f; rotSpeed = 2.6f; bright = 0.95f; break;
++        case EyeState::Speaking: pupilT = 0.55f + 0.35f * level_; openU = 0.92f; openL = 0.74f; rotSpeed = 0.6f + 1.5f * level_; bright = 0.95f + 0.05f * level_; break;
++        case EyeState::Connecting: pupilT = 0.3f; openU = 0.7f; openL = 0.6f; rotSpeed = 5; bright = 0.8f; break;
++        case EyeState::Error: pupilT = 0.25f; openU = 0.55f; openL = 0.5f; rotSpeed = 0; bright = 0.85f; tilt = 0.25f; break;
++        case EyeState::Sleep: pupilT = 0.4f; openU = 0.12f + 0.03f * sinf(t_ * 0.8f); openL = 0.1f; rotSpeed = 0.05f; bright = 0.45f + 0.1f * sinf(t_ * 0.8f); break;
++        default: break;
++    }
++    switch (emotion_) {
++        case Emotion::Happy: happy = 1; openU = std::min(openU, 0.9f); break;
++        case Emotion::Sad: tilt = -0.35f; openU *= 0.8f; break;
++        case Emotion::Angry: tilt = 0.45f; openU *= 0.75f; pupilT *= 0.7f; break;
++        case Emotion::Surprised: openU = 1.15f; openL = 0.9f; pupilT = 0.35f; break;
++        case Emotion::Sleepy: openU *= 0.45f; break;
++        default: break;
++    }
++    pupil_ = approach(pupil_, pupilT, 6, dt);
++    open_u_ = approach(open_u_, openU, 10, dt);
++    open_l_ = approach(open_l_, openL, 10, dt);
++    tilt_ = approach(tilt_, tilt, 8, dt);
++    happy_ = approach(happy_, happy, 8, dt);
++    tilt_r_ = approach(tilt_r_, tiltR, 3, dt);
++    bright_ = approach(bright_, bright, 4, dt);
++    iris_rot_ += rotSpeed * dt;
++    glitch_ = std::max(0.0f, glitch_ - dt);
++    if (s == EyeState::Error && Rnd(0, 1) < dt * 1.5f) glitch_ = 0.12f;
++    if (notification_left_ > 0) notification_left_ -= dt;
++
++    if (message_shown_ < message_.size()) message_shown_ = std::min<float>(message_.size(), message_shown_ + dt * 45);
++
++    memmove(scope_, scope_ + 1, sizeof(float) * (LW - 1));
++    float amp = (s == EyeState::Speaking || s == EyeState::Listening) ? level_ : 0;
++    scope_[LW - 1] = amp * (sinf(t_ * 47) * 0.6f + sinf(t_ * 83 + 1) * 0.4f) * (0.6f + 0.4f * Rnd(0, 1));
++}
++
++inline void Eyes::Put(int x, int y, float v) {
++    if (x < 0 || y < 0 || x >= LW || y >= LH) return;
++    int iv = (int)v;
++    if (iv > 255) iv = 255;
++    uint8_t& p = phos_[y * LW + x];
++    if (iv > p) p = (uint8_t)iv;
++}
++
++void Eyes::DrawEye(float cx, float cy, float R, int side) {
++    const float gx = (gx_ + mx_) * R * 0.42f, gy = (gy_ + my_) * R * 0.34f;
++    const float b = blink_;
++    const float tilt = tilt_ * side;
++    const float ou = lerpf(open_u_, -open_l_ * 0.85f, b), ol = open_l_ * (1 - 0.25f * b);
++    const float Ri = R * 0.74f, Rp = Ri * (0.25f + 0.45f * pupil_);
++    const int x0 = (int)floorf(cx - R - 3), x1 = (int)ceilf(cx + R + 3);
++    const int y0 = (int)floorf(cy - R - 3), y1 = (int)ceilf(cy + R + 3);
++    const float segs = 12, rot = iris_rot_ * side;
++    const float br = bright_;
++    for (int y = y0; y <= y1; y++) {
++        for (int x = x0; x <= x1; x++) {
++            const float dx = x - cx, dy = y - cy, r = sqrtf(dx * dx + dy * dy);
++            float v = 0;
++            const float hr = fabsf(r - (R + 1.5f));
++            if (hr < 1.0f) v = (1 - hr) * 80;
++            if (r > R) { if (v > 0) Put(x, y, v * br); continue; }
++            const float nx = dx / R, curve = 1 - 0.38f * nx * nx;
++            const float up = -R * ou * curve + tilt * dx * 0.38f - tilt_r_ * R * side;
++            const float lo = R * ol * curve - happy_ * R * 0.55f * (1 - nx * nx) - tilt_r_ * R * side;
++            const float du = dy - up, dl = lo - dy;
++            if (du < -0.9f || dl < -0.9f) {
++                if (y % 3 == 0) v = std::max(v, 22.0f);
++                if (v > 0) Put(x, y, v * br);
++                continue;
++            }
++            const float edge = std::min(fabsf(du), fabsf(dl));
++            if (edge < 0.9f) v = std::max(v, 240 * (1 - edge / 0.9f));
++            if (du >= 0 && dl >= 0) {
++                v = std::max(v, 10.0f);
++                const float ix = dx - gx, iy = dy - gy, ir = sqrtf(ix * ix + iy * iy);
++                if (ir < Ri + 1.5f) {
++                    const float d1 = fabsf(ir - Ri);
++                    if (d1 < 1.4f) v = std::max(v, 225 * (1 - d1 / 1.4f));
++                    if (ir > Rp + 2 && ir < Ri - 2) {
++                        const float ia = atan2f(iy, ix);
++                        const float f = fract((ia + rot) / (kPi * 2) * segs);
++                        const float glow = 70 + 110 * level_;
++                        if (f < 0.55f) v = std::max(v, glow * (0.75f + 0.25f * (ir - Rp) / (Ri - Rp)));
++                    }
++                    if (ir < Rp) v = 4;
++                    const float dp = fabsf(ir - Rp);
++                    if (dp < 1.1f) v = std::max(v, 200 * (1 - dp / 1.1f));
++                    const float glx = ix + Rp * 0.42f, gly = iy + Rp * 0.42f;
++                    if (glx * glx + gly * gly < 2.4f) v = 255;
++                }
++            }
++            if (v > 0) Put(x, y, v * br);
++        }
++    }
++}
++
++void Eyes::DrawScope() {
++    const int y0 = 86;
++    const float amp = 9;
++    for (int x = 18; x < LW - 18; x++) {
++        const float w = sinf((x - 18) / float(LW - 36) * kPi);
++        const int y = (int)lroundf(y0 + scope_[x] * amp * w);
++        Put(x, y, 150 * bright_);
++        const int yp = (int)lroundf(y0 + scope_[x - 1] * amp * w);
++        for (int k = std::min(y, yp) + 1; k < std::max(y, yp); k++) Put(x, k, 120 * bright_);
++    }
++}
++
++void Eyes::DrawText(const char32_t* s, int n, int x, int y, uint8_t v) {
++    for (int i = 0; i < n; i++) {
++        const uint8_t* g = Glyph(s[i]);
++        if (g) {
++            for (int r = 0; r < CV_FONT_H; r++) {
++                const uint8_t bits = g[r];
++                if (!bits) continue;
++                const int py = y + r;
++                if (py < 0 || py >= SH) continue;
++                for (int c = 0; c < CV_FONT_W; c++) {
++                    if (bits & (0x80 >> c)) {
++                        const int px = x + c;
++                        PutText(px, py, v);
++                    }
++                }
++            }
++        }
++        x += CV_FONT_W;
++    }
++}
++
++void Eyes::DrawHud() {
++    const uint8_t dim = 150, hi = 235;
++    DrawText(unit_, 6, 4, dim);
++    if (!clock_.empty()) DrawText(clock_.data(), clock_.size(), (SW - CV_FONT_W * (int)clock_.size()) / 2, 4, dim);
++    if (battery_ >= 0) {
++        std::u32string b;
++        b += charging_ ? U'+' : U' ';
++        int bars = (battery_ + 12) / 25;
++        for (int i = 0; i < 4; i++) b += i < bars ? U'█' : U'·';
++        b += U' ';
++        for (char c : std::to_string(battery_)) b += (char32_t)c;
++        b += U'%';
++        DrawText(b.data(), b.size(), SW - 6 - CV_FONT_W * (int)b.size(), 4, dim);
++    }
++    for (int x = 6; x < SW - 6; x += 3) PutText(x, 18, 90);
++    for (int x = 6; x < SW - 6; x += 3) PutText(x, 190, 90);
++
++    std::u32string status = U"> ";
++    if (notification_left_ > 0) {
++        status += notification_;
++    } else {
++        status += StatusText(state_);
++        if (state_ == EyeState::Thinking || state_ == EyeState::Connecting) {
++            int dots = (int)(t_ * 3) % 4;
++            for (int i = 0; i < dots; i++) status += U'.';
++        }
++    }
++    if (((int)(t_ * 2.5f)) & 1) status += U'█';
++    DrawText(status.data(), std::min<int>(status.size(), 28), 6, 194, hi);
++    DrawMessage(210, 2, false);
++}
++
++// Typewriter message, word-wrapped to 28 columns; shows the last `max_lines` lines.
++void Eyes::DrawMessage(int y0, int max_lines, bool cursor) {
++    const uint8_t dim = 150, hi = 235;
++    const int cols = 28;
++    std::u32string shown = message_.substr(0, (size_t)message_shown_);
++    if (role_ == Role::User && !shown.empty()) shown = U"> " + shown;
++    std::u32string lines[16];
++    int nlines = 0;
++    std::u32string cur, word;
++    auto flush_word = [&]() {
++        if (word.empty()) return;
++        if (!cur.empty() && cur.size() + 1 + word.size() > (size_t)cols) {
++            if (nlines < 16) lines[nlines++] = cur; else { for (int i = 1; i < 16; i++) lines[i - 1] = lines[i]; lines[15] = cur; }
++            cur.clear();
++        }
++        while (word.size() > (size_t)cols) {  // hard-break very long words
++            if (!cur.empty()) { lines[nlines < 16 ? nlines++ : 15] = cur; cur.clear(); }
++            lines[nlines < 16 ? nlines++ : 15] = word.substr(0, cols);
++            word = word.substr(cols);
++        }
++        if (!cur.empty()) cur += U' ';
++        cur += word;
++        word.clear();
++    };
++    for (char32_t c : shown) {
++        if (c == U' ' || c == U'\n' || c == U'\t') flush_word(); else word += c;
++    }
++    flush_word();
++    if (!cur.empty()) { if (nlines < 16) lines[nlines++] = cur; else { for (int i = 1; i < 16; i++) lines[i - 1] = lines[i]; lines[15] = cur; } }
++    if (cursor && ((int)(t_ * 2.5f)) & 1) {
++        if (nlines == 0) lines[nlines++] = U"";
++        lines[nlines - 1] += U'█';
++    }
++    const int first = std::max(0, nlines - max_lines);
++    for (int i = first; i < nlines; i++) {
++        DrawText(lines[i], 6, y0 + (i - first) * 13, role_ == Role::User ? dim : hi);
++    }
++}
++
++// ================= circuit-face style (port of proto buildCircuit & co.) =================
++void Eyes::SLine(int x0, int y0, int x1, int y1, uint8_t v) {
++    const int n = std::max({abs(x1 - x0), abs(y1 - y0), 1});
++    for (int i = 0; i <= n; i++) {
++        const int x = (int)lroundf(x0 + (x1 - x0) * (float)i / n), y = (int)lroundf(y0 + (y1 - y0) * (float)i / n);
++        if (x >= 0 && y >= 0 && x < LW && y < LH && v > circuit_[y * LW + x]) circuit_[y * LW + x] = v;
++    }
++}
++
++void Eyes::SRing(float cx, float cy, float r, uint8_t v) {
++    for (int y = (int)floorf(cy - r - 2); y <= cy + r + 2; y++) {
++        for (int x = (int)floorf(cx - r - 2); x <= cx + r + 2; x++) {
++            const float d = fabsf(sqrtf((x - cx) * (x - cx) + (y - cy) * (y - cy)) - r);
++            if (d < 0.8f && x >= 0 && y >= 0 && x < LW && y < LH) {
++                const uint8_t w = (uint8_t)(v * (1 - d / 0.8f));
++                if (w > circuit_[y * LW + x]) circuit_[y * LW + x] = w;
++            }
++        }
++    }
++}
++
++void Eyes::BuildCircuit() {
++    circuit_ = (uint8_t*)heap_caps_calloc(LW * LH, 1, MALLOC_CAP_SPIRAM);
++    if (!circuit_) return;
++    const uint8_t v = 75;
++    auto pad = [this](float x, float y) { SRing(x, y, 1.6f, 110); };
++    const int R = 16;
++    const int eyes[2][2] = {{34, 44}, {86, 44}};
++    for (auto& e : eyes) {
++        const int cx = e[0], cy = e[1], s = cx < 60 ? -1 : 1;
++        SRing(cx, cy, R + 4, 90);
++        SRing(cx, cy, R + 6.5f, 40);
++        SLine(cx, cy - R - 6, cx, 18, v); SLine(cx, 18, 60, 18, v);
++        const int ox = cx + s * (R + 6);
++        SLine(ox, cy - 6, cx + s * 27, cy - 6, v); SLine(cx + s * 27, cy - 6, cx + s * 27, 22, v); pad(cx + s * 27, 21);
++        SLine(ox, cy + 5, cx + s * 30, cy + 5, v); SLine(cx + s * 30, cy + 5, cx + s * 30, 58, v); pad(cx + s * 30, 59);
++        SLine(cx + s * 14, cy + R + 2, cx + s * 14, 64, v); SLine(cx + s * 14, 64, cx + s * 22, 64, v); pad(cx + s * 23, 64);
++        for (int k = 0; k < 4; k++) {
++            const float a = k / 4.0f * kPi * 2 + 0.6f;
++            pad(cx + cosf(a) * (R + 9), cy + sinf(a) * (R + 9));
++        }
++    }
++    for (int x = 55; x <= 65; x++) { circuit_[16 * LW + x] = 110; circuit_[20 * LW + x] = 110; }
++    SLine(55, 16, 55, 20, 110); SLine(65, 16, 65, 20, 110);
++    SLine(57, 20, 57, 58, v); SLine(63, 20, 63, 58, v);
++    SLine(57, 58, 53, 62, v); SLine(63, 58, 67, 62, v); SLine(53, 62, 67, 62, v);
++    pad(52, 62); pad(68, 62);
++    SLine(22, 70, 22, 84, v); SLine(22, 70, 26, 70, v); SLine(22, 84, 26, 84, v);
++    SLine(98, 70, 98, 84, v); SLine(94, 70, 98, 70, v); SLine(94, 84, 98, 84, v);
++}
++
++void Eyes::DrawEyeCircuit(float cx, float cy, float R, int side) {
++    const float gx = (gx_ + mx_) * R * 0.32f, gy = (gy_ + my_) * R * 0.28f;
++    const float b = blink_, tilt = tilt_ * side;
++    const float ou = lerpf(open_u_, -open_l_ * 0.85f, b) * 1.1f, ol = open_l_ * (1 - 0.25f * b) * 1.25f;
++    const float Rc = R * (0.2f + 0.16f * pupil_);
++    const float rot = iris_rot_ * side, br = bright_;
++    for (int y = (int)floorf(cy - R - 2); y <= cy + R + 2; y++) {
++        for (int x = (int)floorf(cx - R - 2); x <= cx + R + 2; x++) {
++            const float dx = x - cx, dy = y - cy, r = sqrtf(dx * dx + dy * dy);
++            if (r > R + 1.5f) continue;
++            const float nx = clampf(dx / R, -1, 1), curve = 1 - 0.3f * nx * nx;
++            const float up = -R * ou * curve + tilt * dx * 0.38f - tilt_r_ * R * side;
++            const float lo = R * ol * curve - happy_ * R * 0.6f * (1 - nx * nx) - tilt_r_ * R * side;
++            const float du = dy - up, dl = lo - dy;
++            float v = 0;
++            if (du < -0.9f || dl < -0.9f) {
++                if (y % 2 == 0 && r < R) Put(x, y, 26 * br);
++                continue;
++            }
++            const float edge = std::min(fabsf(du), fabsf(dl));
++            if (edge < 0.9f && r < R + 0.5f) v = 230 * (1 - edge / 0.9f);
++            if (du >= 0 && dl >= 0) {
++                if (r > R - 3 && r < R) {
++                    const float f = fract((atan2f(dy, dx) + rot) / (kPi * 2) * 3);
++                    if (f < 0.62f) v = std::max(v, 150 + 80 * level_);
++                }
++                const float d2 = fabsf(r - R * 0.72f);
++                if (d2 < 0.8f) v = std::max(v, 140.0f);
++                const float ix = dx - gx, iy = dy - gy, ir = sqrtf(ix * ix + iy * iy);
++                if (ir < Rc + 3.2f) {
++                    if (ir > Rc && ir < Rc + 1.6f) v = 6;
++                    const float dr = fabsf(ir - (Rc + 2.4f));
++                    if (dr < 0.9f) v = std::max(v, 200.0f);
++                    if (ir <= Rc) v = 215 + 40 * (1 - ir / Rc);
++                }
++                if (r < R - 3 && v < 12) v = 12;
++            }
++            if (v > 0) Put(x, y, v * br);
++        }
++    }
++}
++
++void Eyes::DrawMouth() {
++    const int y0 = 77, x0 = 27, x1 = 93;
++    const float talk = (state_ == EyeState::Speaking || state_ == EyeState::Listening) ? level_ : 0;
++    for (int x = x0; x <= x1; x++) {
++        // sinf(pi) is a hair below zero; powf(negative, 1.3) = NaN -> clamp first.
++        const float env = powf(std::max(0.0f, sinf(kPi * (x - x0) / (float)(x1 - x0))), 1.3f);
++        const float idle = 0.6f + 0.4f * sinf(t_ * 3 + x * 0.4f);
++        const float hf = env * (talk * 9 * (0.35f + 0.65f * Rnd(0, 1)) + idle * 0.8f);
++        const int h = std::isfinite(hf) ? std::clamp((int)lroundf(hf), 0, 12) : 0;
++        for (int k = -h; k <= h; k++) Put(x, y0 + k, (225 - abs(k) * 10) * bright_);
++        Put(x, y0, 120 * bright_);
++    }
++}
++
++void Eyes::DrawSpectrum() {
++    const float talk = (state_ == EyeState::Speaking || state_ == EyeState::Listening) ? level_ : 0.05f;
++    for (int i = 0; i < 6; i++) {
++        const float target = talk * (1 - i / 9.0f) * (0.3f + 0.7f * Rnd(0, 1)) + 0.06f;
++        spec_[i] += (target - spec_[i]) * 0.35f;
++        const int h = std::clamp((int)lroundf(spec_[i] * 18), 0, 20), x = 3 + i * 3;
++        for (int k = 0; k < h; k++) { Put(x, 87 - k, 170 * bright_); Put(x + 1, 87 - k, 170 * bright_); }
++    }
++    for (int x = 2; x < 20; x++) Put(x, 88, 90 * bright_);
++}
++
++static std::u32string U32(const char* s) {
++    std::u32string r;
++    while (*s) r += (char32_t)(unsigned char)*s++;
++    return r;
++}
++
++void Eyes::DrawHudCircuit() {
++    const uint8_t dim = 150, hi = 235;
++    static const char* kState[] = {"IDLE", "LISTENING", "PROCESSING", "SPEAKING", "LINKING", "NO SIGNAL", "STANDBY"};
++    static const char* kEmo[] = {"NEUTRAL", "CONFIDENT", "SUBDUED", "HOSTILE", "ALERT", "ANALYTIC", "LOW POWER"};
++    {
++        std::u32string head = header_ + U": " + unit_;
++        if (head.size() > 28) head.resize(28);
++        DrawText(head, 6, 2, hi);
++    }
++    std::u32string st;
++    if (notification_left_ > 0) {
++        st = notification_;
++    } else {
++        st = U32("STATUS: ") + U32(kState[(int)state_]);
++        if (state_ == EyeState::Thinking || state_ == EyeState::Connecting) {
++            for (int i = 0, n = (int)(t_ * 3) % 4; i < n; i++) st += U'.';
++        }
++    }
++    if (st.size() > 23) st.resize(23);
++    DrawText(st, 6, 14, dim);
++    if (battery_ >= 0) {
++        std::u32string b = charging_ ? U"+" : U"";
++        b += U32(std::to_string(battery_).c_str()) + U"%";
++        DrawText(b, SW - 6 - CV_FONT_W * (int)b.size(), 14, dim);
++    }
++    if (hex_t_ < 0 || t_ - hex_t_ > 0.35f) {
++        hex_t_ = t_;
++        for (auto& h : hex_) {
++            char buf[8];
++            snprintf(buf, sizeof(buf), "%04X", (unsigned)(Rand() & 0xffff));
++            h = U32(buf);
++        }
++    }
++    DrawText(U"DIAG", 198, 124, dim);
++    for (int i = 0; i < 3; i++) DrawText(hex_[i], 198, 137 + i * 12, state_ == EyeState::Thinking ? hi : 110);
++    DrawText(U32("EMOTIVE: ") + U32(kEmo[(int)emotion_]), 6, 177, dim);
++    DrawText(state_ == EyeState::Error ? U"NET:LOST" : U"NET:OK", SW - 6 - CV_FONT_W * (state_ == EyeState::Error ? 8 : 6), 177, dim);
++    for (int x = 6; x < SW - 6; x += 3) PutText(x, 190, 90);
++    DrawMessage(195, 3, true);
++}
++
++void Eyes::Render(uint16_t* out) {
++    if (!ok() || !out) return;
++    const Fx fx = has_fx_ ? skin_fx_ : DefaultFx(style_);
++    const int decay = (int)(fx.decay * 256);
++    if (decay <= 0) memset(phos_, 0, LW * LH);
++    else for (int i = 0; i < LW * LH; i++) phos_[i] = (uint8_t)((phos_[i] * decay) >> 8);
++    if (bg_) {   // skin background: a dim, steady phosphor image behind everything
++        const int k = (int)(bright_ * 256);
++        for (int i = 0; i < LW * LH; i++) {
++            const uint8_t c = (uint8_t)((bg_[i] * k) >> 8);
++            if (c > phos_[i]) phos_[i] = c;
++        }
++    }
++    switch (style_) {
++        case kPixel: DrawPixel(); break;
++        case kHolo: DrawHoloCore(); break;
++        case kOrb: DrawOrb(); break;
++        case kPet: DrawPet(); break;
++        case kMinimal: DrawMinimal(); break;
++        case kRealEye: DrawRealEye(); break;
++        default: break;
++    }
++    if (style_ == kCircuit) {
++        if (!circuit_) BuildCircuit();
++        if (circuit_) {
++            const int k = (int)(bright_ * 256);
++            for (int i = 0; i < LW * LH; i++) {
++                const uint8_t c = (uint8_t)((circuit_[i] * k) >> 8);
++                if (c > phos_[i]) phos_[i] = c;
++            }
++        }
++        if (skin_eyes_) {
++            DrawEyeCircuit(sk_lx_, sk_ly_, sk_r_, -1);
++            DrawEyeCircuit(sk_rx_, sk_ry_, sk_r_, 1);
++        } else {
++            DrawEyeCircuit(34, 44, 16, -1);
++            DrawEyeCircuit(86, 44, 16, 1);
++        }
++        DrawMouth();
++        DrawSpectrum();
++    } else if (style_ == kClassic) {
++        if (skin_eyes_) {
++            DrawEye(sk_lx_, sk_ly_, sk_r_, -1);
++            DrawEye(sk_rx_, sk_ry_, sk_r_, 1);
++        } else {
++            DrawEye(33, 50, 22, -1);
++            DrawEye(87, 50, 22, 1);
++        }
++        DrawScope();
++    }
++
++    memset(row_shift_, 0, sizeof(row_shift_));
++    if (glitch_ > 0) {
++        int bands = 2 + Rand() % 3;
++        for (int k = 0; k < bands; k++) {
++            int y = Rand() % SH, h = 2 + Rand() % 10, sh = (int)(Rand() % 15) - 7;
++            for (int j = y; j < std::min(SH, y + h); j++) row_shift_[j] = (int8_t)sh;
++        }
++    }
++    Composite(out, fx);
++    // HUD text is drawn last, straight into the frame
++    switch (fx.hud) {
++        case 1: DrawHudCircuit(); break;
++        case 2: DrawHudPixel(); break;
++        case 3: DrawHudHolo(); break;
++        case 4: DrawHudMinimal(); break;
++        default: DrawHud(); break;
++    }
++    out_ = nullptr;
++}
++
++Fx Eyes::DefaultFx(int style) {
++    Fx f;
++    switch (style) {
++        case kCircuit: f.hud = 1; break;
++        case kPixel: f = {0.82f, 0, false, true, false, 0.0f, 2}; break;
++        case kHolo: f = {0.8f, 3, true, true, true, 0.35f, 3}; break;
++        case kOrb: f = {1.0f, 0, false, false, true, 0.55f, 4}; break;
++        case kPet: f = {1.0f, 0, false, false, true, 0.0f, 4}; break;
++        case kMinimal: f = {1.0f, 0, false, false, true, 0.3f, 4}; break;
++        case kRealEye: f = {1.0f, 0, false, true, true, 0.0f, 4}; break;
++        default: break;   // classic CRT
++    }
++    return f;
++}
++
++void Eyes::Composite(uint16_t* out, const Fx& fx) {
++    const uint16_t* pal = state_ == EyeState::Error ? pal_[2] : has_custom_pal_ ? custom_pal_ : pal_[palette_];
++    cur_pal_ = pal;
++    out_ = out;
++    const int flicker = fx.flicker ? 247 + (int)(Rand() % 9) : 256;   // ~0.965..1.0 in /256
++    const int scan = (int)(fx.scan * 256);
++    for (int Y = 0; Y < SH; Y++) {
++        int k = fx.vign ? rowf_[Y] : 255;
++        if (Y & 1) k = k * scan >> 8;
++        rowk_[Y] = k * flicker >> 8;
++    }
++    for (int X = 0; X < SW; X++) colk_[X] = fx.vign ? colf_[X] : 255;
++    const int noise_mask = fx.noise >= 7 ? 7 : fx.noise >= 3 ? 3 : fx.noise >= 1 ? 1 : 0;
++    for (int Y = 0; Y < SH; Y++) {
++        const int sh = row_shift_[Y], rk = rowk_[Y];
++        uint16_t* orow = out + Y * SW;
++        uint32_t noise = Rand();
++        if (fx.smooth) {
++            // Exact 2x bilinear: weights are always 1/4 and 3/4. Blend the two source rows once,
++            // then each output pixel is a fixed mix of two neighbours of that blended row.
++            const int k = Y >> 1;
++            const int ya = (Y & 1) ? k : (k > 0 ? k - 1 : 0);       // row weighted 1/4
++            const int yb = (Y & 1) ? (k + 1 < LH ? k + 1 : k) : k;  // row weighted 3/4 (even) / ... (odd)
++            const uint8_t* ra = phos_ + ya * LW;
++            const uint8_t* rb = phos_ + yb * LW;
++            uint8_t row[LW + 2];
++            if (Y & 1) { for (int i = 0; i < LW; i++) row[i + 1] = (uint8_t)((ra[i] * 3 + rb[i]) >> 2); }
++            else       { for (int i = 0; i < LW; i++) row[i + 1] = (uint8_t)((ra[i] + rb[i] * 3) >> 2); }
++            row[0] = row[1];
++            row[LW + 1] = row[LW];
++            for (int X = 0; X < SW; X++) {
++                int sx = X + sh;
++                sx = sx < 0 ? 0 : (sx >= SW ? SW - 1 : sx);
++                const int j = (sx >> 1) + 1;
++                int v = (sx & 1) ? (row[j] * 3 + row[j + 1]) >> 2 : (row[j - 1] + row[j] * 3) >> 2;
++                v = ((v * colk_[X]) >> 8) * rk >> 8;
++                if (noise_mask) {
++                    if ((X & 7) == 0) noise = Rand();
++                    v += (int)(noise & noise_mask);
++                    noise >>= 3;
++                }
++                orow[X] = pal[v > 255 ? 255 : v];
++            }
++        } else {
++            const uint8_t* prow = phos_ + (Y >> 1) * LW;
++            for (int X = 0; X < SW; X++) {
++                int sx = X + sh;
++                sx = sx < 0 ? 0 : (sx >= SW ? SW - 1 : sx);
++                int v = ((prow[sx >> 1] * colk_[X]) >> 8) * rk >> 8;
++                if (noise_mask) {
++                    if ((X & 7) == 0) noise = Rand();
++                    v += (int)(noise & noise_mask);
++                    noise >>= 3;
++                }
++                orow[X] = pal[v > 255 ? 255 : v];
++            }
++        }
++    }
++}
++
++}  // namespace cv
+diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_eyes.h b/main/boards/zhengchen-1.54tft-wifi/cv_eyes.h
+new file mode 100644
+index 0000000..4ce4ef5
+--- /dev/null
++++ b/main/boards/zhengchen-1.54tft-wifi/cv_eyes.h
+@@ -0,0 +1,153 @@
++// CRT phosphor robot-eyes engine (port of proto/eyes_engine.js). No LVGL dependency.
++#pragma once
++
++#include <cstdint>
++#include <string>
++
++namespace cv {
++
++std::u32string Utf8ToU32(const std::string& s);
++
++enum class EyeState { Idle, Listening, Thinking, Speaking, Connecting, Error, Sleep };
++
++// Post-processing of a skin (see proto/skins_render.js SKIN_FX).
++struct Fx {
++    float scan = 0.68f;    // brightness of odd rows, 1 = no scanlines
++    int noise = 7;         // random grain amplitude
++    bool flicker = true, vign = true, smooth = false;
++    float decay = 0.55f;   // phosphor persistence
++    int hud = 0;           // 0 crt, 1 circuit, 2 pixel, 3 holo, 4 minimal
++};
++
++enum SkinStyle { kClassic = 0, kCircuit, kPixel, kHolo, kOrb, kPet, kMinimal, kRealEye, kStyleCount };
++
++// A screen skin downloaded from the server (see voice_server/skins.py).
++struct Skin {
++    bool has_fx = false;
++    Fx fx;
++    int style = 0;                       // SkinStyle
++    bool has_palette = false;
++    uint16_t palette[256] = {};          // RGB565 per phosphor intensity
++    std::string background;              // 120*120 intensity bytes, empty = none
++    bool has_eyes = false;
++    int lx = 0, ly = 0, rx = 0, ry = 0, r = 0;
++    std::string unit, header;            // HUD texts (UTF-8), empty = default
++};
++enum class Emotion { Neutral, Happy, Sad, Angry, Surprised, Thinking, Sleepy };
++enum class Role { System, User, Assistant };
++
++class Eyes {
++public:
++    static constexpr int SW = 240, SH = 240, LW = 120, LH = 120;
++
++    Eyes();
++    ~Eyes();
++    bool ok() const { return phos_ != nullptr; }
++
++    void SetState(EyeState s);
++    void SetEmotion(Emotion e);
++    void SetMessage(Role role, const std::string& utf8);
++    void SetNotification(const std::string& utf8, float seconds);
++    void SetLevel(float v);                 // 0..1 voice level (mic or speaker)
++    void SetBattery(int percent, bool charging) { battery_ = percent; charging_ = charging; }
++    void SetPalette(int p) { palette_ = p; has_custom_pal_ = false; }   // 0 amber, 1 green
++    void ApplySkin(const Skin& s);
++    static Fx DefaultFxFor(int style) { return DefaultFx(style); }
++    void SetStyle(int s) { style_ = s; }       // 0 classic lenses, 1 circuit face
++    int style() const { return style_; }
++    void SetClock(const char* hhmm) { clock_ = Utf8ToU32(hhmm ? hhmm : ""); }
++    EyeState state() const { return state_; }
++
++    void Update(float dt);
++    void Render(uint16_t* rgb565);          // SW*SH native RGB565
++
++private:
++    void BuildPalettes();
++    void DrawEye(float cx, float cy, float R, int side);
++    void DrawScope();
++    void DrawHud();
++    void DrawText(const char32_t* s, int n, int x, int y, uint8_t v);
++    void DrawText(const std::u32string& s, int x, int y, uint8_t v) { DrawText(s.data(), (int)s.size(), x, y, v); }
++    void DrawMessage(int y0, int max_lines, bool cursor);
++    // circuit-face style
++    void BuildCircuit();
++    void SLine(int x0, int y0, int x1, int y1, uint8_t v);
++    void SRing(float cx, float cy, float r, uint8_t v);
++    void DrawEyeCircuit(float cx, float cy, float R, int side);
++    void DrawMouth();
++    void DrawSpectrum();
++    void DrawHudCircuit();
++    // modern / extra skins (cv_skins.cc)
++    void DrawOrb();
++    void DrawPet();
++    void DrawMinimal();
++    void DrawHoloCore();
++    void DrawPixel();
++    void DrawRealEye();
++    void Dot(float cx, float cy, float r, float v);
++    void RingPx(float cx, float cy, float r, float v);
++    void DrawHudMinimal();
++    void DrawHudHolo();
++    void DrawHudPixel();
++    void Composite(uint16_t* out, const Fx& fx);
++    static Fx DefaultFx(int style);
++    inline void Put(int x, int y, float v);
++    uint32_t Rand();
++    float Rnd(float a, float b);
++
++    inline void PutText(int x, int y, uint8_t v);   // HUD pixels go straight into the output frame
++
++    uint8_t* phos_ = nullptr;   // LW*LH, internal RAM when possible
++    uint8_t colf_[SW] = {};     // separable vignette: column factor
++    uint8_t rowf_[SH] = {};     // separable vignette: row factor
++    uint8_t colk_[SW] = {};     // per-frame column gain (vignette on/off)
++    bool has_fx_ = false;
++    Fx skin_fx_;
++    std::u32string hexh_[4];
++    float hexh_t_ = -1;
++    int rowk_[SH] = {};         // per-frame row gain (rowf * flicker)
++    uint16_t* out_ = nullptr;   // frame being rendered
++    const uint16_t* cur_pal_ = nullptr;
++    int8_t row_shift_[SH] = {};
++    uint16_t pal_[3][256] = {};
++    int palette_ = 0;
++    int style_ = 0;
++    bool has_custom_pal_ = false;
++    uint16_t custom_pal_[256] = {};
++    uint8_t* bg_ = nullptr;             // skin background layer, LW*LH
++    bool skin_eyes_ = false;
++    float sk_lx_ = 0, sk_ly_ = 0, sk_rx_ = 0, sk_ry_ = 0, sk_r_ = 0;
++    std::u32string unit_ = U"UNIT-07", header_ = U"VOICE INTERFACE";
++    uint8_t* circuit_ = nullptr;  // static traces layer, LW*LH
++    float spec_[6] = {};
++    std::u32string hex_[3];
++    float hex_t_ = -1;
++    uint32_t rng_ = 0x12345678;
++    float t_ = 0;
++    float decay_ = 0.55f;
++
++    EyeState state_ = EyeState::Idle;
++    float state_t_ = 0;
++    Emotion emotion_ = Emotion::Neutral;
++    float emotion_t_ = 0;
++
++    std::u32string message_;
++    float message_shown_ = 0;
++    Role role_ = Role::System;
++    std::u32string notification_;
++    float notification_left_ = 0;
++    std::u32string clock_;
++    int battery_ = -1;
++    bool charging_ = false;
++
++    float gx_ = 0, gy_ = 0, tgx_ = 0, tgy_ = 0, next_saccade_ = 1;
++    float mx_ = 0, my_ = 0, next_micro_ = 0.3f;
++    float blink_ = 0, blink_phase_ = -1, next_blink_ = 2;
++    bool double_blink_ = false;
++    float pupil_ = 0.55f, iris_rot_ = 0, level_ = 0, level_target_ = 0;
++    float open_u_ = 0.9f, open_l_ = 0.75f, tilt_ = 0, happy_ = 0, tilt_r_ = 0;
++    float bright_ = 1, glitch_ = 0;
++    float scope_[LW] = {};
++};
++
++}  // namespace cv
+diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_eyes_display.h b/main/boards/zhengchen-1.54tft-wifi/cv_eyes_display.h
+new file mode 100644
+index 0000000..0bf88f2
+--- /dev/null
++++ b/main/boards/zhengchen-1.54tft-wifi/cv_eyes_display.h
+@@ -0,0 +1,326 @@
++// Full-screen CRT robot eyes on top of the stock LCD UI.
++#pragma once
++
++#include "zhengchen_lcd_display.h"
++#include "cv_eyes.h"
++#include "cv_audio_level.h"
++#include "application.h"
++#include "board.h"
++#include "settings.h"
++
++#include <cJSON.h>
++#include <mbedtls/base64.h>
++#include <esp_heap_caps.h>
++#include <esp_log.h>
++#include <esp_timer.h>
++#include <algorithm>
++#include <cstring>
++#include <ctime>
++#include <string>
++
++class CvEyesDisplay : public ZHENGCHEN_LcdDisplay {
++public:
++    CvEyesDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel,
++                  int width, int height, int offset_x, int offset_y,
++                  bool mirror_x, bool mirror_y, bool swap_xy)
++        : ZHENGCHEN_LcdDisplay(panel_io, panel, width, height, offset_x, offset_y, mirror_x, mirror_y, swap_xy) {}
++
++    void SetupUI() override {
++        ZHENGCHEN_LcdDisplay::SetupUI();
++        DisplayLockGuard lock(this);
++        buf_ = (uint16_t*)heap_caps_aligned_alloc(64, cv::Eyes::SW * cv::Eyes::SH * 2, MALLOC_CAP_SPIRAM);
++        if (!buf_ || !eyes_.ok()) {
++            ESP_LOGE("CvEyes", "Out of PSRAM, keeping stock UI");
++            return;
++        }
++        memset(buf_, 0, cv::Eyes::SW * cv::Eyes::SH * 2);
++        {
++            Settings settings("cv", false);
++            eyes_.SetPalette(settings.GetInt("palette", 0));
++            eyes_.SetStyle(settings.GetInt("style", 0));
++        }
++        lv_obj_t* scr = lv_screen_active();
++        // Hide the stock UI so LVGL doesn't draw it under the canvas.
++        for (uint32_t i = 0; i < lv_obj_get_child_count(scr); i++) {
++            lv_obj_add_flag(lv_obj_get_child(scr, i), LV_OBJ_FLAG_HIDDEN);
++        }
++        canvas_ = lv_canvas_create(scr);
++        lv_canvas_set_buffer(canvas_, buf_, cv::Eyes::SW, cv::Eyes::SH, LV_COLOR_FORMAT_RGB565);
++        // The eyes are drawn at 240x240: centre them on other screens, shrink them on smaller ones.
++        lv_obj_center(canvas_);
++        const int fit = std::min(width_, height_);
++        if (fit < cv::Eyes::SW) {
++            lv_obj_set_style_transform_pivot_x(canvas_, cv::Eyes::SW / 2, 0);
++            lv_obj_set_style_transform_pivot_y(canvas_, cv::Eyes::SH / 2, 0);
++            lv_obj_set_style_transform_scale(canvas_, 256 * fit / cv::Eyes::SW, 0);
++        }
++        lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
++        lv_obj_remove_flag(canvas_, LV_OBJ_FLAG_SCROLLABLE);
++        last_us_ = esp_timer_get_time();
++        timer_ = lv_timer_create(TimerCb, kFrameMs, this);
++        ESP_LOGI("CvEyes", "Eyes UI started (%d ms/frame)", kFrameMs);
++    }
++
++    void SetStatus(const char* status) override { ZHENGCHEN_LcdDisplay::SetStatus(status); }
++
++    // ---- driven by MCP tools (Claude) ----
++    bool SetEyeColor(const std::string& color) {
++        int p = color == "green" ? 1 : color == "amber" ? 0 : -1;
++        if (p < 0) return false;
++        {
++            DisplayLockGuard lock(this);
++            eyes_.SetPalette(p);
++        }
++        Settings settings("cv", true);
++        settings.SetInt("palette", p);
++        return true;
++    }
++
++    static int StyleFromName(const std::string& n) {
++        static const char* kNames[] = {"classic", "circuit", "pixel", "hud", "orb", "pet", "minimal", "eye"};
++        for (int i = 0; i < cv::kStyleCount; i++) if (n == kNames[i]) return i;
++        return -1;
++    }
++
++    bool SetEyeStyle(const std::string& style) {
++        int s = StyleFromName(style);
++        if (s < 0) return false;
++        {
++            DisplayLockGuard lock(this);
++            eyes_.SetStyle(s);
++        }
++        Settings settings("cv", true);
++        settings.SetInt("style", s);
++        return true;
++    }
++
++    // Download a skin JSON (voice_server /skins/<id>.json) and apply it. Blocking: call from a task.
++    std::string LoadSkinFromUrl(const std::string& url) {
++        auto network = Board::GetInstance().GetNetwork();
++        if (!network) return "no network";
++        auto http = network->CreateHttp(0);
++        if (!http->Open("GET", url)) return "cannot connect to " + url;
++        const int status = http->GetStatusCode();
++        if (status != 200) {
++            http->Close();
++            return "HTTP " + std::to_string(status);
++        }
++        // Read in pieces: Http::ReadAll() deadlocks on bodies > 8 KB (the receiver waits for the buffer
++        // to be drained while ReadAll waits for EOF), and skins with a background are ~20 KB.
++        std::string body;
++        char chunk[2048];
++        for (;;) {
++            const int n = http->Read(chunk, sizeof(chunk));
++            if (n <= 0) break;
++            body.append(chunk, n);
++            if (body.size() > 256 * 1024) break;   // sanity limit
++        }
++        http->Close();
++
++        cJSON* root = cJSON_Parse(body.c_str());
++        if (!root) return "bad skin JSON";
++        cv::Skin s;
++        auto str = [&](const char* k) { cJSON* v = cJSON_GetObjectItem(root, k); return cJSON_IsString(v) ? std::string(v->valuestring) : std::string(); };
++        s.style = std::max(0, StyleFromName(str("base")));
++        if (cJSON* f = cJSON_GetObjectItem(root, "fx"); cJSON_IsObject(f)) {
++            s.has_fx = true;
++            s.fx = cv::Eyes::DefaultFxFor(s.style);
++            auto fnum = [&](const char* k, float def) { cJSON* v = cJSON_GetObjectItem(f, k); return cJSON_IsNumber(v) ? (float)v->valuedouble : def; };
++            s.fx.scan = fnum("scan", s.fx.scan);
++            s.fx.noise = (int)fnum("noise", s.fx.noise);
++            s.fx.flicker = fnum("flicker", s.fx.flicker) > 0.5f;
++            s.fx.vign = fnum("vign", s.fx.vign) > 0.5f;
++            s.fx.smooth = fnum("smooth", s.fx.smooth) > 0.5f;
++            s.fx.decay = fnum("decay", s.fx.decay);
++        }
++        const std::string pal = str("palette565");
++        if (pal.size() == 256 * 4) {
++            s.has_palette = true;
++            for (int i = 0; i < 256; i++) s.palette[i] = (uint16_t)strtoul(pal.substr(i * 4, 4).c_str(), nullptr, 16);
++        }
++        const std::string bg64 = str("background");
++        if (!bg64.empty()) {
++            s.background.resize(cv::Eyes::LW * cv::Eyes::LH + 8);
++            size_t out = 0;
++            if (mbedtls_base64_decode((unsigned char*)s.background.data(), s.background.size(), &out,
++                                      (const unsigned char*)bg64.data(), bg64.size()) == 0) {
++                s.background.resize(out);
++            } else {
++                s.background.clear();
++            }
++        }
++        if (cJSON* e = cJSON_GetObjectItem(root, "eyes"); cJSON_IsObject(e)) {
++            auto num = [&](const char* k) { cJSON* v = cJSON_GetObjectItem(e, k); return cJSON_IsNumber(v) ? v->valueint : 0; };
++            s.has_eyes = true;
++            s.lx = num("lx"); s.ly = num("ly"); s.rx = num("rx"); s.ry = num("ry"); s.r = num("r");
++            if (s.r < 6) s.has_eyes = false;
++        }
++        if (cJSON* t = cJSON_GetObjectItem(root, "texts"); cJSON_IsObject(t)) {
++            cJSON* u = cJSON_GetObjectItem(t, "unit");
++            cJSON* h = cJSON_GetObjectItem(t, "header");
++            if (cJSON_IsString(u)) s.unit = u->valuestring;
++            if (cJSON_IsString(h)) s.header = h->valuestring;
++        }
++        const std::string id = str("id");
++        cJSON_Delete(root);
++        {
++            DisplayLockGuard lock(this);
++            eyes_.ApplySkin(s);
++        }
++        ESP_LOGI("CvEyes", "skin '%s' applied (style %d, palette %d, bg %d)", id.c_str(), s.style,
++                 s.has_palette, (int)!s.background.empty());
++        return "ok: " + id;
++    }
++
++    bool ShowEyeEmotion(const std::string& name, int seconds) {
++        static const std::pair<const char*, cv::Emotion> kMap[] = {
++            {"neutral", cv::Emotion::Neutral}, {"happy", cv::Emotion::Happy}, {"sad", cv::Emotion::Sad},
++            {"angry", cv::Emotion::Angry}, {"surprised", cv::Emotion::Surprised},
++            {"thinking", cv::Emotion::Thinking}, {"sleepy", cv::Emotion::Sleepy},
++        };
++        for (auto& [n, e] : kMap) {
++            if (name == n) {
++                DisplayLockGuard lock(this);
++                eyes_.SetEmotion(e);
++                emotion_hold_ = seconds > 0 ? (float)seconds : 5.0f;
++                return true;
++            }
++        }
++        return false;
++    }
++
++    void ShowNotification(const char* notification, int duration_ms = 3000) override {
++        DisplayLockGuard lock(this);
++        eyes_.SetNotification(notification ? notification : "", duration_ms / 1000.0f);
++    }
++    void ShowNotification(const std::string& notification, int duration_ms = 3000) override {
++        ShowNotification(notification.c_str(), duration_ms);
++    }
++
++    void SetEmotion(const char* emotion) override {
++        if (!emotion) return;
++        DisplayLockGuard lock(this);
++        std::string e = emotion;
++        thinking_ = (e == "thinking");
++        if (emotion_hold_ > 0 && e != "circle_xmark" && e != "triangle_exclamation") {
++            return;  // an emotion chosen via MCP tool wins for a few seconds
++        }
++        error_hold_ = 0;
++        if (e == "happy" || e == "laughing" || e == "funny" || e == "loving" || e == "winking" ||
++            e == "cool" || e == "relaxed" || e == "delicious" || e == "kissy" || e == "confident" || e == "silly") {
++            eyes_.SetEmotion(cv::Emotion::Happy);
++        } else if (e == "sad" || e == "crying") {
++            eyes_.SetEmotion(cv::Emotion::Sad);
++        } else if (e == "angry") {
++            eyes_.SetEmotion(cv::Emotion::Angry);
++        } else if (e == "surprised" || e == "shocked" || e == "embarrassed" || e == "confused") {
++            eyes_.SetEmotion(cv::Emotion::Surprised);
++        } else if (e == "thinking") {
++            eyes_.SetEmotion(cv::Emotion::Thinking);
++        } else if (e == "sleepy") {
++            eyes_.SetEmotion(cv::Emotion::Sleepy);
++        } else if (e == "circle_xmark" || e == "triangle_exclamation") {
++            error_hold_ = 6.0f;  // Alert(): show the error look for a while
++            eyes_.SetEmotion(cv::Emotion::Neutral);
++        } else {
++            eyes_.SetEmotion(cv::Emotion::Neutral);
++        }
++    }
++
++    void SetChatMessage(const char* role, const char* content) override {
++        DisplayLockGuard lock(this);
++        std::string r = role ? role : "system";
++        cv::Role rr = r == "user" ? cv::Role::User : r == "assistant" ? cv::Role::Assistant : cv::Role::System;
++        eyes_.SetMessage(rr, content ? content : "");
++    }
++
++    void ClearChatMessages() override {
++        DisplayLockGuard lock(this);
++        eyes_.SetMessage(cv::Role::System, "");
++    }
++
++    void SetPowerSaveMode(bool on) override {
++        DisplayLockGuard lock(this);
++        sleep_ = on;
++    }
++
++private:
++    static constexpr int kFrameMs = 40;   // 25 fps
++    cv::Eyes eyes_;
++    uint16_t* buf_ = nullptr;
++    lv_obj_t* canvas_ = nullptr;
++    lv_timer_t* timer_ = nullptr;
++    int64_t last_us_ = 0;
++    float battery_timer_ = 0;
++    float error_hold_ = 0;
++    float emotion_hold_ = 0;
++    float render_ms_avg_ = 0;
++    uint32_t period_ = kFrameMs;
++    int64_t last_perf_log_ = 0;
++    bool thinking_ = false;
++    bool sleep_ = false;
++
++    static void TimerCb(lv_timer_t* t) {
++        static_cast<CvEyesDisplay*>(lv_timer_get_user_data(t))->Frame();
++    }
++
++    // Runs inside the LVGL task (display lock already held).
++    void Frame() {
++        const int64_t now = esp_timer_get_time();
++        float dt = (now - last_us_) / 1e6f;
++        last_us_ = now;
++        if (dt > 0.1f) dt = 0.1f;
++
++        auto state = Application::GetInstance().GetDeviceState();
++        cv::EyeState es = cv::EyeState::Idle;
++        switch (state) {
++            case kDeviceStateListening: es = thinking_ ? cv::EyeState::Thinking : cv::EyeState::Listening; break;
++            case kDeviceStateSpeaking: es = cv::EyeState::Speaking; thinking_ = false; break;
++            case kDeviceStateStarting: case kDeviceStateConnecting: case kDeviceStateActivating:
++            case kDeviceStateUpgrading: case kDeviceStateWifiConfiguring: case kDeviceStateUnknown:
++                es = cv::EyeState::Connecting; break;
++            case kDeviceStateFatalError: es = cv::EyeState::Error; break;
++            default: es = cv::EyeState::Idle; thinking_ = false; break;
++        }
++        if (emotion_hold_ > 0) emotion_hold_ -= dt;
++        if (error_hold_ > 0) { error_hold_ -= dt; if (es == cv::EyeState::Idle) es = cv::EyeState::Error; }
++        if (sleep_ && es == cv::EyeState::Idle) es = cv::EyeState::Sleep;
++        eyes_.SetState(es);
++
++        // voice level: speaker while speaking, mic while listening
++        float level = 0;
++        if (es == cv::EyeState::Speaking && now - cv::g_spk_time_us.load() < 150000) level = cv::g_spk_level.load();
++        if (es == cv::EyeState::Listening && now - cv::g_mic_time_us.load() < 150000) level = cv::g_mic_level.load();
++        eyes_.SetLevel(level);
++
++        battery_timer_ -= dt;
++        if (battery_timer_ <= 0) {
++            battery_timer_ = 5;
++            int lvl = 0; bool charging = false, discharging = false;
++            if (Board::GetInstance().GetBatteryLevel(lvl, charging, discharging)) eyes_.SetBattery(lvl, charging);
++            time_t tt = time(nullptr);
++            struct tm tmv;
++            localtime_r(&tt, &tmv);
++            if (tmv.tm_year > 120) {
++                char hhmm[8];
++                strftime(hhmm, sizeof(hhmm), "%H:%M", &tmv);
++                eyes_.SetClock(hhmm);
++            }
++        }
++
++        eyes_.Update(dt);
++        const int64_t r0 = esp_timer_get_time();
++        eyes_.Render(buf_);
++        lv_obj_invalidate(canvas_);
++        // Never let rendering eat the whole core: stretch the frame period if a frame is slow.
++        const int render_ms = (int)((esp_timer_get_time() - r0) / 1000);
++        render_ms_avg_ = render_ms_avg_ * 0.9f + render_ms * 0.1f;
++        // ~60% of one core at most: leaves room for LVGL's own flush, audio and Wi-Fi.
++        const uint32_t period = std::max<int>(kFrameMs, (int)(render_ms_avg_ * 1.6f) + 12);
++        if (period != period_) { period_ = period; lv_timer_set_period(timer_, period); }
++        if (now - last_perf_log_ > 30000000) {
++            last_perf_log_ = now;
++            ESP_LOGI("CvEyes", "render %.1f ms, frame period %u ms", render_ms_avg_, (unsigned)period);
++        }
++    }
++};
+diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_font.h b/main/boards/zhengchen-1.54tft-wifi/cv_font.h
+new file mode 100644
+index 0000000..cca55de
+--- /dev/null
++++ b/main/boards/zhengchen-1.54tft-wifi/cv_font.h
+@@ -0,0 +1,182 @@
++// Generated by tools/gen_font.py from Consolas 12px. Do not edit.
++#pragma once
++#include <stdint.h>
++#define CV_FONT_W 8
++#define CV_FONT_H 12
++#define CV_FONT_COUNT 171
++static const uint16_t cv_font_codes[CV_FONT_COUNT] = {
++    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 171, 176, 183, 187, 1025, 1040, 1041, 1042, 1043, 1044, 1045, 1046, 1047, 1048, 1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 1058, 1059, 1060, 1061, 1062, 1063, 1064, 1065, 1066, 1067, 1068, 1069, 1070, 1071, 1072, 1073, 1074, 1075, 1076, 1077, 1078, 1079, 1080, 1081, 1082, 1083, 1084, 1085, 1086, 1087, 1088, 1089, 1090, 1091, 1092, 1093, 1094, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1105, 8212, 8230, 8470, 9608, 9646, 9654
++};
++static const uint8_t cv_font_bits[CV_FONT_COUNT][CV_FONT_H] = {
++    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x10, 0x10, 0x10, 0x10, 0x10, 0x00, 0x18, 0x18, 0x00, 0x00, 0x00},
++    {0x00, 0x28, 0x28, 0x28, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x28, 0x28, 0xfc, 0x28, 0x50, 0xfc, 0x50, 0x50, 0x00, 0x00, 0x00},
++    {0x10, 0x38, 0x50, 0x50, 0x30, 0x18, 0x14, 0x24, 0x78, 0x20, 0x00, 0x00},
++    {0x00, 0xe2, 0xa4, 0xa8, 0xf0, 0x1c, 0x34, 0x54, 0x9c, 0x00, 0x00, 0x00},
++    {0x00, 0x38, 0x48, 0x48, 0x30, 0x54, 0x9c, 0x8c, 0x7e, 0x00, 0x00, 0x00},
++    {0x00, 0x10, 0x10, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
++    {0x08, 0x10, 0x10, 0x20, 0x20, 0x20, 0x20, 0x20, 0x10, 0x10, 0x08, 0x00},
++    {0x20, 0x10, 0x10, 0x08, 0x08, 0x08, 0x08, 0x08, 0x10, 0x10, 0x20, 0x00},
++    {0x00, 0x10, 0x54, 0x38, 0x7c, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x10, 0x10, 0x7c, 0x10, 0x10, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x30, 0x30, 0x60, 0x00},
++    {0x00, 0x00, 0x00, 0x00, 0x00, 0x3c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x30, 0x00, 0x00, 0x00},
++    {0x00, 0x04, 0x08, 0x08, 0x10, 0x10, 0x10, 0x20, 0x20, 0x40, 0x00, 0x00},
++    {0x00, 0x3c, 0x26, 0x46, 0x4a, 0x52, 0x62, 0x64, 0x3c, 0x00, 0x00, 0x00},
++    {0x00, 0x30, 0x50, 0x10, 0x10, 0x10, 0x10, 0x10, 0x7c, 0x00, 0x00, 0x00},
++    {0x00, 0x38, 0x44, 0x04, 0x04, 0x08, 0x10, 0x20, 0x7c, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x04, 0x04, 0x38, 0x04, 0x04, 0x04, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x18, 0x18, 0x28, 0x48, 0x88, 0xfc, 0x08, 0x08, 0x00, 0x00, 0x00},
++    {0x00, 0x7c, 0x40, 0x40, 0x78, 0x04, 0x04, 0x0c, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x38, 0x20, 0x40, 0x78, 0x44, 0x44, 0x44, 0x38, 0x00, 0x00, 0x00},
++    {0x00, 0x7c, 0x04, 0x08, 0x08, 0x10, 0x10, 0x30, 0x20, 0x00, 0x00, 0x00},
++    {0x00, 0x38, 0x44, 0x64, 0x38, 0x6c, 0x44, 0x44, 0x38, 0x00, 0x00, 0x00},
++    {0x00, 0x38, 0x44, 0x44, 0x44, 0x3c, 0x04, 0x08, 0x70, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x30, 0x30, 0x00, 0x00, 0x30, 0x30, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x30, 0x30, 0x00, 0x00, 0x30, 0x30, 0x30, 0x60, 0x00},
++    {0x00, 0x00, 0x04, 0x18, 0x20, 0x40, 0x20, 0x18, 0x04, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x00, 0x7c, 0x00, 0x7c, 0x00, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x40, 0x30, 0x08, 0x04, 0x08, 0x30, 0x40, 0x00, 0x00, 0x00},
++    {0x00, 0x30, 0x0c, 0x04, 0x04, 0x38, 0x00, 0x30, 0x30, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0xcc, 0x84, 0x34, 0x54, 0x54, 0x78, 0x00, 0x80, 0xf0, 0x00},
++    {0x00, 0x10, 0x28, 0x28, 0x28, 0x44, 0x7c, 0x44, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x44, 0x44, 0x78, 0x44, 0x44, 0x44, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x1c, 0x20, 0x40, 0x40, 0x40, 0x40, 0x60, 0x3c, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x4c, 0x44, 0x44, 0x44, 0x44, 0x48, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x40, 0x40, 0x78, 0x40, 0x40, 0x40, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x40, 0x40, 0x78, 0x40, 0x40, 0x40, 0x40, 0x00, 0x00, 0x00},
++    {0x00, 0x3c, 0x40, 0x80, 0x9c, 0x84, 0x84, 0x44, 0x3c, 0x00, 0x00, 0x00},
++    {0x00, 0x44, 0x44, 0x44, 0x7c, 0x44, 0x44, 0x44, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x7c, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x7c, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x70, 0x00, 0x00, 0x00},
++    {0x00, 0x44, 0x48, 0x50, 0x60, 0x60, 0x50, 0x48, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x44, 0x44, 0x6c, 0x6c, 0x54, 0x44, 0x44, 0x46, 0x00, 0x00, 0x00},
++    {0x00, 0x64, 0x64, 0x64, 0x54, 0x54, 0x4c, 0x4c, 0x4c, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x4c, 0x84, 0x84, 0x84, 0x84, 0xc8, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x44, 0x44, 0x44, 0x78, 0x40, 0x40, 0x40, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x4c, 0x84, 0x84, 0x84, 0x84, 0xc8, 0x78, 0x20, 0x1c, 0x00},
++    {0x00, 0x78, 0x44, 0x44, 0x44, 0x78, 0x4c, 0x44, 0x46, 0x00, 0x00, 0x00},
++    {0x00, 0x38, 0x40, 0x40, 0x30, 0x08, 0x04, 0x04, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x7c, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x00, 0x00, 0x00},
++    {0x00, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x38, 0x00, 0x00, 0x00},
++    {0x00, 0x44, 0x44, 0x44, 0x68, 0x28, 0x28, 0x28, 0x10, 0x00, 0x00, 0x00},
++    {0x00, 0x44, 0x44, 0x44, 0x54, 0x6c, 0x6c, 0x6c, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0xcc, 0x48, 0x38, 0x30, 0x30, 0x28, 0x44, 0xc6, 0x00, 0x00, 0x00},
++    {0x00, 0x82, 0x44, 0x6c, 0x28, 0x10, 0x10, 0x10, 0x10, 0x00, 0x00, 0x00},
++    {0x00, 0x7c, 0x08, 0x08, 0x10, 0x10, 0x20, 0x20, 0x7c, 0x00, 0x00, 0x00},
++    {0x00, 0x38, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x38, 0x00},
++    {0x00, 0x40, 0x20, 0x20, 0x10, 0x10, 0x10, 0x08, 0x08, 0x04, 0x00, 0x00},
++    {0x00, 0x38, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x38, 0x00},
++    {0x00, 0x10, 0x28, 0x44, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfe, 0x00},
++    {0x60, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x38, 0x04, 0x3c, 0x44, 0x4c, 0x3c, 0x00, 0x00, 0x00},
++    {0x00, 0x40, 0x40, 0x78, 0x64, 0x44, 0x44, 0x44, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x3c, 0x60, 0x40, 0x40, 0x60, 0x3c, 0x00, 0x00, 0x00},
++    {0x00, 0x04, 0x04, 0x3c, 0x44, 0x44, 0x44, 0x4c, 0x34, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x38, 0x44, 0x7c, 0x40, 0x60, 0x3c, 0x00, 0x00, 0x00},
++    {0x00, 0x1e, 0x20, 0x20, 0xfc, 0x20, 0x20, 0x20, 0x20, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x3e, 0x44, 0x44, 0x78, 0x40, 0x7c, 0x44, 0x78, 0x00},
++    {0x00, 0x40, 0x40, 0x58, 0x64, 0x44, 0x44, 0x44, 0x44, 0x00, 0x00, 0x00},
++    {0x18, 0x18, 0x00, 0x70, 0x10, 0x10, 0x10, 0x10, 0x7c, 0x00, 0x00, 0x00},
++    {0x18, 0x18, 0x00, 0x78, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x70, 0x00},
++    {0x00, 0x40, 0x40, 0x48, 0x50, 0x60, 0x50, 0x48, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x70, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x7c, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x7c, 0x54, 0x54, 0x54, 0x54, 0x54, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x78, 0x64, 0x44, 0x44, 0x44, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x38, 0x44, 0x44, 0x44, 0x44, 0x38, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x78, 0x64, 0x44, 0x44, 0x44, 0x78, 0x40, 0x40, 0x00},
++    {0x00, 0x00, 0x00, 0x3c, 0x44, 0x44, 0x44, 0x4c, 0x34, 0x04, 0x04, 0x00},
++    {0x00, 0x00, 0x00, 0x5c, 0x64, 0x40, 0x40, 0x40, 0x40, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x38, 0x40, 0x60, 0x18, 0x08, 0x70, 0x00, 0x00, 0x00},
++    {0x00, 0x20, 0x20, 0xf8, 0x20, 0x20, 0x20, 0x20, 0x38, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x44, 0x44, 0x44, 0x44, 0x4c, 0x3c, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x44, 0x44, 0x44, 0x28, 0x28, 0x10, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x44, 0x54, 0x54, 0x5c, 0x6c, 0x24, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x6c, 0x28, 0x10, 0x28, 0x44, 0xc6, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x44, 0x44, 0x28, 0x28, 0x30, 0x10, 0x20, 0xe0, 0x00},
++    {0x00, 0x00, 0x00, 0x7c, 0x08, 0x10, 0x10, 0x20, 0x7c, 0x00, 0x00, 0x00},
++    {0x00, 0x0c, 0x10, 0x10, 0x10, 0x60, 0x10, 0x10, 0x10, 0x10, 0x0c, 0x00},
++    {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x00},
++    {0x00, 0x60, 0x10, 0x10, 0x10, 0x0c, 0x10, 0x10, 0x10, 0x10, 0x60, 0x00},
++    {0x00, 0x00, 0x00, 0x00, 0x00, 0xc8, 0x38, 0x00, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x24, 0x48, 0x48, 0x4c, 0x24, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x30, 0x48, 0x48, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x90, 0x48, 0x48, 0x48, 0x90, 0x00, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x40, 0x40, 0x78, 0x40, 0x40, 0x40, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x10, 0x28, 0x28, 0x28, 0x44, 0x7c, 0x44, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x40, 0x40, 0x78, 0x44, 0x44, 0x44, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x44, 0x44, 0x78, 0x44, 0x44, 0x44, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x00, 0x00, 0x00},
++    {0x00, 0x3c, 0x24, 0x24, 0x24, 0x24, 0x64, 0x44, 0xfe, 0x82, 0x82, 0x00},
++    {0x00, 0x78, 0x40, 0x40, 0x78, 0x40, 0x40, 0x40, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x92, 0x54, 0x54, 0x38, 0x38, 0x54, 0x54, 0x92, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x04, 0x04, 0x38, 0x04, 0x04, 0x04, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x44, 0x4c, 0x4c, 0x54, 0x54, 0x64, 0x64, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x44, 0x4c, 0x4c, 0x54, 0x54, 0x64, 0x64, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x44, 0x48, 0x50, 0x60, 0x60, 0x50, 0x48, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x70, 0x50, 0x50, 0x50, 0x50, 0xd0, 0x90, 0x90, 0x00, 0x00, 0x00},
++    {0x00, 0x44, 0x44, 0x6c, 0x6c, 0x54, 0x44, 0x44, 0x46, 0x00, 0x00, 0x00},
++    {0x00, 0x44, 0x44, 0x44, 0x7c, 0x44, 0x44, 0x44, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x4c, 0x84, 0x84, 0x84, 0x84, 0xc8, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x7c, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x44, 0x44, 0x44, 0x78, 0x40, 0x40, 0x40, 0x00, 0x00, 0x00},
++    {0x00, 0x1c, 0x20, 0x40, 0x40, 0x40, 0x40, 0x60, 0x3c, 0x00, 0x00, 0x00},
++    {0x00, 0x7c, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x00, 0x00, 0x00},
++    {0x00, 0x44, 0x44, 0x28, 0x28, 0x18, 0x10, 0x10, 0x60, 0x00, 0x00, 0x00},
++    {0x00, 0x10, 0x7c, 0xd6, 0x92, 0x92, 0xd6, 0x7c, 0x10, 0x00, 0x00, 0x00},
++    {0x00, 0xcc, 0x48, 0x38, 0x30, 0x30, 0x28, 0x44, 0xc6, 0x00, 0x00, 0x00},
++    {0x00, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x7e, 0x02, 0x02, 0x00},
++    {0x00, 0x44, 0x44, 0x44, 0x44, 0x3c, 0x04, 0x04, 0x04, 0x00, 0x00, 0x00},
++    {0x00, 0x54, 0x54, 0x54, 0x54, 0x54, 0x54, 0x54, 0x7c, 0x00, 0x00, 0x00},
++    {0x00, 0x54, 0x54, 0x54, 0x54, 0x54, 0x54, 0x54, 0x7c, 0x04, 0x04, 0x00},
++    {0x00, 0xc0, 0x40, 0x40, 0x78, 0x44, 0x44, 0x44, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x82, 0x82, 0x82, 0xf2, 0x8a, 0x8a, 0x8a, 0xf2, 0x00, 0x00, 0x00},
++    {0x00, 0x40, 0x40, 0x40, 0x78, 0x44, 0x44, 0x44, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x78, 0x0c, 0x04, 0x3c, 0x04, 0x04, 0x08, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x4c, 0x52, 0x52, 0x72, 0x52, 0x52, 0x52, 0x4c, 0x00, 0x00, 0x00},
++    {0x00, 0x3c, 0x44, 0x44, 0x44, 0x3c, 0x24, 0x24, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x38, 0x04, 0x3c, 0x44, 0x4c, 0x3c, 0x00, 0x00, 0x00},
++    {0x38, 0x20, 0x58, 0x64, 0x44, 0x44, 0x44, 0x38, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x7c, 0x44, 0x78, 0x44, 0x44, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x3c, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x38, 0x28, 0x28, 0x28, 0x48, 0xfc, 0x84, 0x84, 0x00},
++    {0x00, 0x00, 0x00, 0x38, 0x44, 0x7c, 0x40, 0x60, 0x3c, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x92, 0x54, 0x38, 0x38, 0x54, 0x92, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x7c, 0x04, 0x38, 0x04, 0x04, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x44, 0x4c, 0x54, 0x54, 0x64, 0x44, 0x00, 0x00, 0x00},
++    {0x48, 0x70, 0x00, 0x44, 0x4c, 0x54, 0x54, 0x64, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x48, 0x50, 0x60, 0x50, 0x48, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x38, 0x28, 0x28, 0x28, 0x48, 0xc8, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x44, 0x6c, 0x6c, 0x6c, 0x54, 0x84, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x44, 0x44, 0x7c, 0x44, 0x44, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x38, 0x44, 0x44, 0x44, 0x44, 0x38, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x7c, 0x44, 0x44, 0x44, 0x44, 0x44, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x78, 0x64, 0x44, 0x44, 0x44, 0x78, 0x40, 0x40, 0x00},
++    {0x00, 0x00, 0x00, 0x3c, 0x60, 0x40, 0x40, 0x60, 0x3c, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x7c, 0x10, 0x10, 0x10, 0x10, 0x10, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x44, 0x44, 0x28, 0x28, 0x30, 0x10, 0x20, 0xe0, 0x00},
++    {0x00, 0x10, 0x10, 0x7c, 0xd6, 0x92, 0x92, 0xd6, 0x7c, 0x10, 0x10, 0x00},
++    {0x00, 0x00, 0x00, 0x6c, 0x28, 0x10, 0x28, 0x44, 0xc6, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x48, 0x48, 0x48, 0x48, 0x48, 0x7c, 0x04, 0x04, 0x00},
++    {0x00, 0x00, 0x00, 0x44, 0x44, 0x44, 0x3c, 0x04, 0x04, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x54, 0x54, 0x54, 0x54, 0x54, 0x7c, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x54, 0x54, 0x54, 0x54, 0x54, 0x7e, 0x02, 0x02, 0x00},
++    {0x00, 0x00, 0x00, 0xc0, 0x40, 0x78, 0x44, 0x44, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x82, 0x82, 0xf2, 0x8a, 0x8a, 0xf2, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x40, 0x40, 0x78, 0x44, 0x44, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x78, 0x04, 0x7c, 0x04, 0x0c, 0x78, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x4c, 0x52, 0x72, 0x52, 0x52, 0x4c, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x1c, 0x24, 0x24, 0x1c, 0x24, 0x64, 0x00, 0x00, 0x00},
++    {0x00, 0x48, 0x00, 0x38, 0x44, 0x7c, 0x40, 0x60, 0x3c, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x00, 0x00, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
++    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xa8, 0xa8, 0x00, 0x00, 0x00},
++    {0x00, 0xae, 0xaa, 0xae, 0xe0, 0xee, 0xa0, 0xa0, 0xa0, 0x00, 0x00, 0x00},
++    {0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe},
++    {0x00, 0x7e, 0x42, 0x5a, 0x4a, 0x4a, 0x52, 0x42, 0x7e, 0x00, 0x00, 0x00},
++    {0x00, 0x7e, 0x42, 0x5a, 0x4a, 0x4a, 0x52, 0x42, 0x7e, 0x00, 0x00, 0x00},
++};
+diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_hw.cc b/main/boards/zhengchen-1.54tft-wifi/cv_hw.cc
+new file mode 100644
+index 0000000..6678657
+--- /dev/null
++++ b/main/boards/zhengchen-1.54tft-wifi/cv_hw.cc
+@@ -0,0 +1,238 @@
++#include "cv_hw.h"
++
++#include "board.h"
++#include "config.h"
++#include "settings.h"
++
++#include <cJSON.h>
++#include <driver/gpio.h>
++#include <esp_log.h>
++#include <esp_system.h>
++#include <freertos/FreeRTOS.h>
++#include <freertos/task.h>
++
++#include <memory>
++#include <mutex>
++
++#define TAG "CvHw"
++
++namespace cv {
++namespace {
++
++HwConfig g_hw;
++bool g_loaded = false;
++std::mutex g_mu;
++
++int Int(cJSON* o, const char* k, int def) {
++    auto* v = cJSON_GetObjectItem(o, k);
++    return cJSON_IsNumber(v) ? v->valueint : def;
++}
++bool Bool(cJSON* o, const char* k, bool def) {
++    auto* v = cJSON_GetObjectItem(o, k);
++    return cJSON_IsBool(v) ? cJSON_IsTrue(v) : def;
++}
++std::string Str(cJSON* o, const char* k, const std::string& def) {
++    auto* v = cJSON_GetObjectItem(o, k);
++    return cJSON_IsString(v) ? std::string(v->valuestring) : def;
++}
++
++HwConfig Defaults() {
++    HwConfig hw;   // struct defaults = this board (config.h)
++    hw.inputs = {{11, true, "Left antenna", 4, "affection", "affection", "affection"},
++                 {12, true, "Right antenna", 4, "affection", "affection", "affection"}};
++    return hw;
++}
++
++bool Parse(const std::string& json, HwConfig& hw) {
++    cJSON* root = cJSON_Parse(json.c_str());
++    if (!root) return false;
++    hw = Defaults();
++    if (auto* d = cJSON_GetObjectItem(root, "display"); cJSON_IsObject(d)) {
++        auto& x = hw.display;
++        x.driver = Str(d, "driver", x.driver);
++        x.width = Int(d, "width", x.width);
++        x.height = Int(d, "height", x.height);
++        x.offset_x = Int(d, "offset_x", x.offset_x);
++        x.offset_y = Int(d, "offset_y", x.offset_y);
++        x.mirror_x = Bool(d, "mirror_x", x.mirror_x);
++        x.mirror_y = Bool(d, "mirror_y", x.mirror_y);
++        x.swap_xy = Bool(d, "swap_xy", x.swap_xy);
++        x.invert = Bool(d, "invert", x.invert);
++        x.bgr = Str(d, "rgb_order", "rgb") == "bgr";
++        x.bl_invert = Bool(d, "bl_invert", x.bl_invert);
++        x.spi_mode = Int(d, "spi_mode", x.spi_mode);
++        x.pclk_mhz = Int(d, "pclk_mhz", x.pclk_mhz);
++        x.i2c_addr = Int(d, "i2c_addr", x.i2c_addr);
++        if (auto* p = cJSON_GetObjectItem(d, "pins"); cJSON_IsObject(p)) {
++            x.mosi = Int(p, "mosi", x.mosi); x.sclk = Int(p, "sclk", x.sclk); x.cs = Int(p, "cs", x.cs);
++            x.dc = Int(p, "dc", x.dc); x.rst = Int(p, "rst", x.rst); x.bl = Int(p, "bl", x.bl);
++            x.sda = Int(p, "sda", x.sda); x.scl = Int(p, "scl", x.scl);
++        }
++    }
++    if (auto* a = cJSON_GetObjectItem(root, "audio"); cJSON_IsObject(a)) {
++        hw.mic_ws = Int(a, "mic_ws", hw.mic_ws); hw.mic_sck = Int(a, "mic_sck", hw.mic_sck);
++        hw.mic_din = Int(a, "mic_din", hw.mic_din); hw.spk_dout = Int(a, "spk_dout", hw.spk_dout);
++        hw.spk_bclk = Int(a, "spk_bclk", hw.spk_bclk); hw.spk_lrck = Int(a, "spk_lrck", hw.spk_lrck);
++    }
++    if (auto* b = cJSON_GetObjectItem(root, "buttons"); cJSON_IsObject(b)) {
++        hw.btn_boot = Int(b, "boot", hw.btn_boot);
++        hw.btn_vol_up = Int(b, "volume_up", hw.btn_vol_up);
++        hw.btn_vol_down = Int(b, "volume_down", hw.btn_vol_down);
++    }
++    if (auto* p = cJSON_GetObjectItem(root, "power"); cJSON_IsObject(p)) {
++        hw.power_latch = Int(p, "latch", hw.power_latch);
++        hw.charge_detect = Int(p, "charge_detect", hw.charge_detect);
++    }
++    if (auto* arr = cJSON_GetObjectItem(root, "inputs"); cJSON_IsArray(arr)) {
++        hw.inputs.clear();
++        cJSON* it;
++        cJSON_ArrayForEach(it, arr) {
++            HwInput in;
++            in.pin = Int(it, "pin", -1);
++            in.touch = Str(it, "type", "touch") == "touch";
++            in.name = Str(it, "name", "input");
++            in.sensitivity = Int(it, "sensitivity", 4);
++            in.tap = Str(it, "tap", "none");
++            in.dbl = Str(it, "double", "none");
++            in.hold = Str(it, "hold", "none");
++            if (in.pin >= 0 && hw.inputs.size() < 8) hw.inputs.push_back(in);
++        }
++    }
++    if (auto* arr = cJSON_GetObjectItem(root, "outputs"); cJSON_IsArray(arr)) {
++        cJSON* it;
++        cJSON_ArrayForEach(it, arr) {
++            HwOutput o{Int(it, "pin", -1), Str(it, "type", "led"), Str(it, "name", "output"),
++                       Bool(it, "active_low", false)};
++            if (o.pin >= 0) hw.outputs.push_back(o);
++        }
++    }
++    if (auto* c = cJSON_GetObjectItem(root, "camera"); cJSON_IsObject(c)) {
++        hw.camera.type = Str(c, "type", "none");
++        if (auto* p = cJSON_GetObjectItem(c, "pins"); cJSON_IsObject(p)) {
++            static const char* kD[] = {"d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7"};
++            for (int i = 0; i < 8; i++) hw.camera.d[i] = Int(p, kD[i], -1);
++            hw.camera.xclk = Int(p, "xclk", -1); hw.camera.pclk = Int(p, "pclk", -1);
++            hw.camera.vsync = Int(p, "vsync", -1); hw.camera.href = Int(p, "href", -1);
++            hw.camera.sda = Int(p, "sda", -1); hw.camera.scl = Int(p, "scl", -1);
++            hw.camera.pwdn = Int(p, "pwdn", -1); hw.camera.reset = Int(p, "reset", -1);
++        }
++    }
++    cJSON_Delete(root);
++    hw.from_defaults = false;
++    return true;
++}
++
++// Everything except input actions needs a restart to take effect.
++std::string RebootKey(const HwConfig& h) {
++    char buf[512];
++    const auto& d = h.display;
++    snprintf(buf, sizeof(buf), "%s|%d|%d|%d|%d|%d%d%d%d%d%d|%d|%d|%d|%d,%d,%d,%d,%d,%d,%d,%d|%d,%d,%d,%d,%d,%d|%d,%d,%d|%d,%d|%s",
++             d.driver.c_str(), d.width, d.height, d.offset_x, d.offset_y, d.mirror_x, d.mirror_y, d.swap_xy, d.invert,
++             d.bgr, d.bl_invert, d.spi_mode, d.pclk_mhz, d.i2c_addr, d.mosi, d.sclk, d.cs, d.dc, d.rst, d.bl, d.sda,
++             d.scl, h.mic_ws, h.mic_sck, h.mic_din, h.spk_dout, h.spk_bclk, h.spk_lrck, h.btn_boot, h.btn_vol_up,
++             h.btn_vol_down, h.power_latch, h.charge_detect, h.camera.type.c_str());
++    std::string k = buf;
++    for (auto& i : h.inputs) k += "|i" + std::to_string(i.pin) + (i.touch ? "t" : "b") + std::to_string(i.sensitivity);
++    for (auto& o : h.outputs) k += "|o" + std::to_string(o.pin) + o.type + (o.active_low ? "L" : "H");
++    if (h.camera.type == "board") {
++        for (int v : h.camera.d) k += "," + std::to_string(v);
++        k += "," + std::to_string(h.camera.xclk) + "," + std::to_string(h.camera.pclk) + "," +
++             std::to_string(h.camera.vsync) + "," + std::to_string(h.camera.href);
++    }
++    return k;
++}
++
++void RestartTask(void*) {
++    vTaskDelay(pdMS_TO_TICKS(1500));   // let the MCP reply reach the server
++    esp_restart();
++}
++
++}  // namespace
++
++const HwConfig& Hw() {
++    std::lock_guard<std::mutex> lock(g_mu);
++    if (!g_loaded) {
++        g_loaded = true;
++        g_hw = Defaults();
++        // Safety: VOLUME- held at power-on ignores a broken profile (e.g. wrong display pins).
++        gpio_config_t io = {};
++        io.pin_bit_mask = 1ULL << VOLUME_DOWN_BUTTON_GPIO;
++        io.mode = GPIO_MODE_INPUT;
++        io.pull_up_en = GPIO_PULLUP_ENABLE;
++        gpio_config(&io);
++        vTaskDelay(pdMS_TO_TICKS(5));
++        if (gpio_get_level(VOLUME_DOWN_BUTTON_GPIO) == 0) {
++            ESP_LOGW(TAG, "VOLUME- held at boot: using the built-in hardware defaults");
++        } else {
++            Settings settings("cvhw", false);
++            std::string json = settings.GetString("json");
++            if (!json.empty() && !Parse(json, g_hw)) {
++                ESP_LOGE(TAG, "stored hardware profile is invalid, using defaults");
++                g_hw = Defaults();
++            }
++        }
++        gpio_reset_pin(VOLUME_DOWN_BUTTON_GPIO);
++        ESP_LOGI(TAG, "hardware: display %s %dx%d, %d inputs, %d outputs, camera %s (%s)",
++                 g_hw.display.driver.c_str(), g_hw.display.width, g_hw.display.height, (int)g_hw.inputs.size(),
++                 (int)g_hw.outputs.size(), g_hw.camera.type.c_str(), g_hw.from_defaults ? "defaults" : "profile");
++    }
++    return g_hw;
++}
++
++void HwSetInputs(const std::vector<HwInput>& inputs) {
++    std::lock_guard<std::mutex> lock(g_mu);
++    g_hw.inputs = inputs;
++}
++
++std::vector<HwInput> HwInputsSnapshot() {
++    std::lock_guard<std::mutex> lock(g_mu);
++    return g_hw.inputs;
++}
++
++std::string HwDefaultUrl() {
++    Settings settings("wifi", false);
++    std::string url = settings.GetString("ota_url");
++    if (url.empty()) url = CONFIG_OTA_URL;
++    auto p = url.find("/xiaozhi/ota");
++    return (p == std::string::npos ? url : url.substr(0, p)) + "/device/hardware.json";
++}
++
++std::string HwReload(const std::string& url_in) {
++    std::string url = url_in.empty() ? HwDefaultUrl() : url_in;
++    auto network = Board::GetInstance().GetNetwork();
++    auto http = network->CreateHttp(0);
++    if (!http->Open("GET", url)) return "cannot open " + url;
++    if (http->GetStatusCode() != 200) {
++        int code = http->GetStatusCode();
++        http->Close();
++        return "HTTP " + std::to_string(code) + " from " + url;
++    }
++    std::string body;
++    char buf[1024];
++    while (true) {
++        int n = http->Read(buf, sizeof(buf));
++        if (n <= 0) break;
++        body.append(buf, n);
++        if (body.size() > 16384) break;
++    }
++    http->Close();
++
++    HwConfig fresh;
++    if (!Parse(body, fresh)) return "invalid hardware profile";
++    const HwConfig& cur = Hw();
++    bool reboot = RebootKey(fresh) != RebootKey(cur);
++    {
++        Settings settings("cvhw", true);
++        if (settings.GetString("json") == body) return "hardware profile unchanged";
++        settings.SetString("json", body);
++    }
++    if (reboot) {
++        ESP_LOGW(TAG, "pins/display changed: restarting");
++        xTaskCreate(RestartTask, "hw_restart", 2048, nullptr, 5, nullptr);
++        return "saved; pins or display changed, the device restarts now";
++    }
++    HwSetInputs(fresh.inputs);
++    return "saved; input actions applied";
++}
++
++}  // namespace cv
+diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_hw.h b/main/boards/zhengchen-1.54tft-wifi/cv_hw.h
+new file mode 100644
+index 0000000..cee2941
+--- /dev/null
++++ b/main/boards/zhengchen-1.54tft-wifi/cv_hw.h
+@@ -0,0 +1,66 @@
++// Hardware profile: display, pins, inputs (antennae/buttons) and their actions, outputs, camera.
++// Edited in the ClaudeVoice app, downloaded from <server>/device/hardware.json, kept in NVS ("cvhw").
++// Defaults are this board's wiring (config.h). Hold VOLUME- while powering on to boot with defaults.
++#pragma once
++
++#include <string>
++#include <vector>
++
++namespace cv {
++
++struct HwDisplay {
++    std::string driver = "st7789";   // st7789 gc9a01 ili9341 st7796 ssd1306 sh1106 none
++    int width = 240, height = 240, offset_x = 0, offset_y = 0;
++    bool mirror_x = false, mirror_y = false, swap_xy = false, invert = true, bgr = false, bl_invert = false;
++    int spi_mode = 3, pclk_mhz = 80, i2c_addr = 0x3C;
++    int mosi = 41, sclk = 42, cs = 21, dc = 40, rst = 45, bl = 20, sda = -1, scl = -1;
++    bool IsOled() const { return driver == "ssd1306" || driver == "sh1106"; }
++};
++
++struct HwInput {
++    int pin = -1;
++    bool touch = true;
++    std::string name;
++    int sensitivity = 4;                  // % rise over the baseline that counts as a touch
++    std::string tap, dbl, hold;           // comma-separated actions
++};
++
++struct HwOutput {
++    int pin = -1;
++    std::string type;                     // vibration led buzzer relay
++    std::string name;
++    bool active_low = false;
++};
++
++struct HwCamera {
++    std::string type = "none";            // none board esp32cam pc
++    int d[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
++    int xclk = -1, pclk = -1, vsync = -1, href = -1, sda = -1, scl = -1, pwdn = -1, reset = -1;
++};
++
++struct HwConfig {
++    HwDisplay display;
++    int mic_ws = 4, mic_sck = 5, mic_din = 6, spk_dout = 7, spk_bclk = 15, spk_lrck = 16;
++    int btn_boot = 0, btn_vol_up = 10, btn_vol_down = 39;
++    int power_latch = 2, charge_detect = 9;
++    std::vector<HwInput> inputs;
++    std::vector<HwOutput> outputs;
++    HwCamera camera;
++    bool from_defaults = true;
++};
++
++// Loaded once at boot (before the board initialises anything).
++const HwConfig& Hw();
++
++// Download the profile; store it. Returns a human-readable result. If pins/display changed the
++// device restarts shortly after (the reply is sent first); action-only changes apply at once.
++std::string HwReload(const std::string& url);
++
++// Profile URL next to the OTA URL: http://<server>/device/hardware.json
++std::string HwDefaultUrl();
++
++// Updates input actions in RAM (used by HwReload and the assistant's tool).
++void HwSetInputs(const std::vector<HwInput>& inputs);
++std::vector<HwInput> HwInputsSnapshot();
++
++}  // namespace cv
+diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_io.cc b/main/boards/zhengchen-1.54tft-wifi/cv_io.cc
+new file mode 100644
+index 0000000..fc15fca
+--- /dev/null
++++ b/main/boards/zhengchen-1.54tft-wifi/cv_io.cc
+@@ -0,0 +1,586 @@
++#include "cv_io.h"
++#include "cv_eyes_display.h"
++#include "mcp_server.h"
++#include "application.h"
++#include "assets/lang_config.h"
++#include "board.h"
++#include "cv_hw.h"
++
++#include <cJSON.h>
++#include <cstring>
++#include <vector>
++
++#include <driver/gpio.h>
++#include <driver/ledc.h>
++#include <driver/touch_sens.h>
++#include <esp_adc/adc_oneshot.h>
++#include <esp_log.h>
++#include <esp_timer.h>
++#include <freertos/FreeRTOS.h>
++#include <freertos/task.h>
++
++#include <algorithm>
++#include <atomic>
++#include <cmath>
++#include <cstdio>
++#include <mutex>
++
++#define TAG "CvIo"
++
++namespace cv {
++namespace {
++
++CvEyesDisplay* g_display = nullptr;   // animated eyes, may be null (OLED / no screen)
++std::mutex g_mu;
++
++// ---------------- pins ----------------
++enum class Mode { Free, Out, In, Pwm, Servo, Antenna };
++struct PinState { int pin; Mode mode; int channel; };
++PinState g_pins[sizeof(kUserPins) / sizeof(int)];
++bool g_servo_timer = false;
++bool g_pwm_timer = false;
++uint32_t g_pwm_freq = 0;
++adc_oneshot_unit_handle_t g_adc = nullptr;
++
++PinState* Find(int pin) {
++    for (auto& p : g_pins) if (p.pin == pin) return &p;
++    return nullptr;
++}
++
++std::string PinError(int pin) {
++    if (pin == 2) return "GPIO2 is the board's power latch: driving it switches the device off. Use another pin.";
++    std::string s = "GPIO" + std::to_string(pin) + " is not available. Free pins:";
++    for (int p : kUserPins) {
++        auto* st = Find(p);
++        if (st && st->mode != Mode::Antenna) s += " " + std::to_string(p);
++    }
++    return s;
++}
++
++PinState* Claim(int pin) {
++    PinState* p = Find(pin);
++    if (!p) throw std::runtime_error(PinError(pin));
++    if (p->mode == Mode::Antenna) throw std::runtime_error("GPIO" + std::to_string(pin) + " is assigned to an input or output in the hardware profile.");
++    return p;
++}
++
++void Release(PinState* p) {
++    if (p->mode == Mode::Pwm || p->mode == Mode::Servo) {
++        ledc_stop(LEDC_LOW_SPEED_MODE, (ledc_channel_t)p->channel, 0);
++    }
++    if (p->mode != Mode::Free) gpio_reset_pin((gpio_num_t)p->pin);
++    p->mode = Mode::Free;
++    p->channel = -1;
++}
++
++int AllocChannel(PinState* self) {
++    // LEDC channel 0 belongs to the backlight.
++    for (int ch = 1; ch < 8; ch++) {
++        bool used = false;
++        for (auto& p : g_pins) if (&p != self && p.channel == ch) used = true;
++        if (!used) return ch;
++    }
++    throw std::runtime_error("All 7 PWM/servo channels are busy; release a pin first.");
++}
++
++void SetupLedc(PinState* p, Mode mode, ledc_timer_t timer, uint32_t duty) {
++    if (p->mode != mode) {
++        Release(p);
++        p->channel = AllocChannel(p);
++        ledc_channel_config_t ch = {};
++        ch.gpio_num = p->pin;
++        ch.speed_mode = LEDC_LOW_SPEED_MODE;
++        ch.channel = (ledc_channel_t)p->channel;
++        ch.timer_sel = timer;
++        ch.duty = duty;
++        ESP_ERROR_CHECK(ledc_channel_config(&ch));
++        p->mode = mode;
++    } else {
++        ledc_set_duty(LEDC_LOW_SPEED_MODE, (ledc_channel_t)p->channel, duty);
++        ledc_update_duty(LEDC_LOW_SPEED_MODE, (ledc_channel_t)p->channel);
++    }
++}
++
++ReturnValue Servo(int pin, int angle, int min_us, int max_us) {
++    std::lock_guard<std::mutex> lock(g_mu);
++    PinState* p = Claim(pin);
++    if (!g_servo_timer) {
++        ledc_timer_config_t t = {};
++        t.speed_mode = LEDC_LOW_SPEED_MODE;
++        t.duty_resolution = LEDC_TIMER_14_BIT;
++        t.timer_num = LEDC_TIMER_1;
++        t.freq_hz = 50;
++        t.clk_cfg = LEDC_AUTO_CLK;
++        ESP_ERROR_CHECK(ledc_timer_config(&t));
++        g_servo_timer = true;
++    }
++    angle = std::clamp(angle, 0, 180);
++    const float us = min_us + (max_us - min_us) * angle / 180.0f;
++    const uint32_t duty = (uint32_t)(us / 20000.0f * 16383);
++    SetupLedc(p, Mode::Servo, LEDC_TIMER_1, duty);
++    return "servo on GPIO" + std::to_string(pin) + " -> " + std::to_string(angle) + " deg";
++}
++
++ReturnValue Pwm(int pin, int freq, int duty_percent) {
++    std::lock_guard<std::mutex> lock(g_mu);
++    PinState* p = Claim(pin);
++    freq = std::clamp(freq, 1, 40000);
++    if (!g_pwm_timer || g_pwm_freq != (uint32_t)freq) {
++        ledc_timer_config_t t = {};
++        t.speed_mode = LEDC_LOW_SPEED_MODE;
++        t.duty_resolution = LEDC_TIMER_10_BIT;
++        t.timer_num = LEDC_TIMER_2;
++        t.freq_hz = (uint32_t)freq;
++        t.clk_cfg = LEDC_AUTO_CLK;
++        if (ledc_timer_config(&t) != ESP_OK) throw std::runtime_error("unsupported PWM frequency");
++        g_pwm_timer = true;
++        g_pwm_freq = freq;
++    }
++    const uint32_t duty = (uint32_t)(std::clamp(duty_percent, 0, 100) * 1023 / 100);
++    SetupLedc(p, Mode::Pwm, LEDC_TIMER_2, duty);
++    return "PWM on GPIO" + std::to_string(pin) + ": " + std::to_string(freq) + " Hz, " +
++           std::to_string(duty_percent) + "% (all PWM pins share one frequency)";
++}
++
++ReturnValue Write(int pin, int level) {
++    std::lock_guard<std::mutex> lock(g_mu);
++    PinState* p = Claim(pin);
++    if (p->mode != Mode::Out) {
++        Release(p);
++        gpio_config_t c = {};
++        c.pin_bit_mask = 1ULL << pin;
++        c.mode = GPIO_MODE_INPUT_OUTPUT;   // readable back
++        ESP_ERROR_CHECK(gpio_config(&c));
++        p->mode = Mode::Out;
++    }
++    gpio_set_level((gpio_num_t)pin, level ? 1 : 0);
++    return true;
++}
++
++ReturnValue Read(int pin, const std::string& pull) {
++    std::lock_guard<std::mutex> lock(g_mu);
++    PinState* p = Claim(pin);
++    if (p->mode != Mode::Out) {
++        Release(p);
++        gpio_config_t c = {};
++        c.pin_bit_mask = 1ULL << pin;
++        c.mode = GPIO_MODE_INPUT;
++        c.pull_up_en = pull == "up" ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE;
++        c.pull_down_en = pull == "down" ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE;
++        ESP_ERROR_CHECK(gpio_config(&c));
++        p->mode = Mode::In;
++    }
++    return gpio_get_level((gpio_num_t)pin);
++}
++
++ReturnValue AnalogRead(int pin) {
++    std::lock_guard<std::mutex> lock(g_mu);
++    PinState* p = Claim(pin);
++    if (pin < 1 || pin > 10) throw std::runtime_error("Analog input works on GPIO1 and GPIO3 only (ADC1).");
++    if (!g_adc) {
++        adc_oneshot_unit_init_cfg_t u = {};
++        u.unit_id = ADC_UNIT_1;
++        ESP_ERROR_CHECK(adc_oneshot_new_unit(&u, &g_adc));
++    }
++    Release(p);
++    adc_oneshot_chan_cfg_t c = {};
++    c.atten = ADC_ATTEN_DB_12;
++    c.bitwidth = ADC_BITWIDTH_12;
++    ESP_ERROR_CHECK(adc_oneshot_config_channel(g_adc, (adc_channel_t)(pin - 1), &c));
++    int raw = 0;
++    ESP_ERROR_CHECK(adc_oneshot_read(g_adc, (adc_channel_t)(pin - 1), &raw));
++    p->mode = Mode::In;
++    char buf[96];
++    snprintf(buf, sizeof(buf), "{\"raw\":%d,\"max\":4095,\"approx_volts\":%.2f}", raw, raw * 3.1f / 4095.0f);
++    return std::string(buf);
++}
++
++ReturnValue ListPins() {
++    std::lock_guard<std::mutex> lock(g_mu);
++    static const char* kModes[] = {"free", "output", "input", "pwm", "servo", "antenna"};
++    std::string s = "{\"pins\":[";
++    for (size_t i = 0; i < sizeof(g_pins) / sizeof(g_pins[0]); i++) {
++        if (i) s += ",";
++        s += "{\"gpio\":" + std::to_string(g_pins[i].pin) + ",\"mode\":\"" + kModes[(int)g_pins[i].mode] + "\"}";
++    }
++    s += "],\"note\":\"GPIO2 = power latch (never touch). Analog only on GPIO1/3. 3.3V logic, max ~20 mA per pin; "
++         "power servos from 5V, not from a GPIO.\"}";
++    return s;
++}
++
++// ---------------- inputs (touch antennae / buttons) and outputs ----------------
++// Pins, types and actions come from the hardware profile (cv_hw.h); actions can change at runtime.
++constexpr int kMaxInputs = 8;
++constexpr int64_t kHoldUs = 700 * 1000;      // press longer than this = hold
++constexpr int64_t kDoubleUs = 350 * 1000;    // second tap within this = double tap
++
++struct InputRt {
++    int pin = -1;
++    bool touch = true;
++    touch_channel_handle_t chan = nullptr;
++    float base = 0;
++    std::atomic<uint32_t> raw{0};
++    std::atomic<bool> pressed{false};
++    int64_t down_us = 0, last_up_us = 0;
++    bool hold_fired = false, tap_pending = false;
++};
++
++touch_sensor_handle_t g_touch = nullptr;
++InputRt g_in[kMaxInputs];
++int g_in_count = 0;
++std::atomic<int> g_touches{0};
++std::atomic<int64_t> g_last_touch_us{0};
++std::atomic<float> g_affection{0.5f};   // 0 = lonely, 1 = blissful
++Display* g_screen = nullptr;            // any screen (notifications)
++bool g_listen_held = false;
++
++std::vector<HwOutput> g_outputs;
++
++void OutputSet(const HwOutput& o, bool on) {
++    gpio_set_level((gpio_num_t)o.pin, on != o.active_low);
++}
++
++void PulseTask(void* arg) {
++    int ms = (int)(intptr_t)arg;
++    for (auto& o : g_outputs) if (o.type == "vibration") OutputSet(o, true);
++    vTaskDelay(pdMS_TO_TICKS(ms));
++    for (auto& o : g_outputs) if (o.type == "vibration") OutputSet(o, false);
++    vTaskDelete(nullptr);
++}
++
++void Vibrate(int ms) {
++    bool any = false;
++    for (auto& o : g_outputs) any |= o.type == "vibration";
++    if (any) xTaskCreate(PulseTask, "vibe", 2048, (void*)(intptr_t)std::clamp(ms, 20, 3000), 3, nullptr);
++}
++
++void Affection() {
++    g_touches++;
++    g_last_touch_us = esp_timer_get_time();
++    g_affection = std::min(1.0f, g_affection.load() + 0.2f);
++    ESP_LOGI(TAG, "affection %.2f", g_affection.load());
++    if (g_display) g_display->ShowEyeEmotion("happy", 4);
++    if (g_screen) {
++        static const char* kPurr[] = {"МРРР...", "ЕЩЁ!", "ПРИЯТНО", "ХОРОШО..."};
++        g_screen->ShowNotification(kPurr[g_touches % 4], 2500);
++    }
++    auto& app = Application::GetInstance();
++    if (app.GetDeviceState() == kDeviceStateIdle) app.PlaySound(Lang::Sounds::OGG_POPUP);
++}
++
++void SendEvent(const std::string& input, const char* gesture) {
++    auto& app = Application::GetInstance();
++    if (app.GetDeviceState() == kDeviceStateIdle) {
++        // Opens the channel; the server recognises the "cv_event:" prefix and lets the assistant react.
++        app.WakeWordInvoke("cv_event:" + input + ":" + gesture);
++        return;
++    }
++    cJSON* root = cJSON_CreateObject();
++    cJSON_AddStringToObject(root, "jsonrpc", "2.0");
++    cJSON_AddStringToObject(root, "method", "notifications/cv_event");
++    cJSON* params = cJSON_AddObjectToObject(root, "params");
++    cJSON_AddStringToObject(params, "input", input.c_str());
++    cJSON_AddStringToObject(params, "gesture", gesture);
++    char* s = cJSON_PrintUnformatted(root);
++    app.SendMcpMessage(s);
++    cJSON_free(s);
++    cJSON_Delete(root);
++}
++
++// Runs one comma-separated action list. `phase`: 0 = gesture recognised, 1 = hold released.
++void RunActions(const HwInput& in, const std::string& list, const char* gesture, int phase) {
++    auto& app = Application::GetInstance();
++    size_t pos = 0;
++    while (pos <= list.size()) {
++        size_t comma = list.find(',', pos);
++        std::string a = list.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos);
++        pos = comma == std::string::npos ? list.size() + 1 : comma + 1;
++        if (a.empty() || a == "none") continue;
++        if (phase == 1) {   // hold released: only push-to-talk cares
++            if (a == "listen" && g_listen_held) {
++                g_listen_held = false;
++                app.Schedule([&app]() { app.StopListening(); });
++            }
++            continue;
++        }
++        ESP_LOGI(TAG, "%s %s -> %s", in.name.c_str(), gesture, a.c_str());
++        if (a == "affection") Affection();
++        else if (a == "wake") app.Schedule([&app]() { app.ToggleChatState(); });
++        else if (a == "listen") {
++            if (strcmp(gesture, "hold") == 0) {
++                g_listen_held = true;
++                app.Schedule([&app]() { app.StartListening(); });
++            } else {
++                app.Schedule([&app]() { app.ToggleChatState(); });
++            }
++        }
++        else if (a == "stop") app.Schedule([&app]() { app.AbortSpeaking(kAbortReasonNone); });
++        else if (a == "event") SendEvent(in.name, gesture);
++        else if (a == "vibrate") Vibrate(strcmp(gesture, "hold") == 0 ? 600 : 200);
++        else if (a == "volume_up" || a == "volume_down") {
++            auto codec = Board::GetInstance().GetAudioCodec();
++            int v = std::clamp(codec->output_volume() + (a == "volume_up" ? 10 : -10), 0, 100);
++            codec->SetOutputVolume(v);
++            if (g_screen) g_screen->ShowNotification(Lang::Strings::VOLUME + std::to_string(v / 10));
++        }
++        else if (a.rfind("emotion:", 0) == 0) {
++            if (g_display) g_display->ShowEyeEmotion(a.substr(8), 5);
++            else if (g_screen) g_screen->SetEmotion(a.substr(8).c_str());
++        }
++        else if (a.rfind("sound:", 0) == 0) {
++            const std::string s = a.substr(6);
++            if (s == "success") app.PlaySound(Lang::Sounds::OGG_SUCCESS);
++            else if (s == "vibration") app.PlaySound(Lang::Sounds::OGG_VIBRATION);
++            else if (s == "exclamation") app.PlaySound(Lang::Sounds::OGG_EXCLAMATION);
++            else app.PlaySound(Lang::Sounds::OGG_POPUP);
++        }
++    }
++}
++
++void Gesture(int idx, const char* gesture, int phase = 0) {
++    auto inputs = HwInputsSnapshot();
++    if (idx >= (int)inputs.size()) return;
++    const HwInput& in = inputs[idx];
++    const std::string& list = strcmp(gesture, "tap") == 0 ? in.tap : strcmp(gesture, "double") == 0 ? in.dbl : in.hold;
++    RunActions(in, list, gesture, phase);
++}
++
++bool InputHasAffection(int idx) {
++    auto inputs = HwInputsSnapshot();
++    if (idx >= (int)inputs.size()) return false;
++    auto& in = inputs[idx];
++    return (in.tap + in.dbl + in.hold).find("affection") != std::string::npos;
++}
++
++void InputTask(void*) {
++    vTaskDelay(pdMS_TO_TICKS(1500));   // settle, then take touch baselines
++    for (int i = 0; i < g_in_count; i++) {
++        if (!g_in[i].touch) continue;
++        uint32_t v = 0;
++        touch_channel_read_data(g_in[i].chan, TOUCH_CHAN_DATA_TYPE_SMOOTH, &v);
++        g_in[i].base = v;
++    }
++    int64_t last_crave = esp_timer_get_time();
++    while (true) {
++        vTaskDelay(pdMS_TO_TICKS(40));
++        const int64_t now = esp_timer_get_time();
++        auto inputs = HwInputsSnapshot();
++        bool stroking = false;
++        for (int i = 0; i < g_in_count && i < (int)inputs.size(); i++) {
++            auto& r = g_in[i];
++            bool on;
++            if (r.touch) {
++                uint32_t v = 0;
++                if (touch_channel_read_data(r.chan, TOUCH_CHAN_DATA_TYPE_SMOOTH, &v) != ESP_OK) continue;
++                r.raw = v;
++                const float k = inputs[i].sensitivity / 100.0f;
++                on = r.pressed ? v > r.base * (1 + k * 0.5f) : v > r.base * (1 + k);
++                if (!on && !r.pressed) r.base += (v - r.base) * 0.01f;   // follow slow drift
++            } else {
++                on = gpio_get_level((gpio_num_t)r.pin) == 0;               // buttons: active low
++            }
++            if (on && !r.pressed) {                                        // press
++                r.pressed = true;
++                r.down_us = now;
++                r.hold_fired = false;
++            } else if (on && r.pressed && !r.hold_fired && now - r.down_us > kHoldUs) {
++                r.hold_fired = true;                                       // hold recognised while held
++                r.tap_pending = false;
++                Gesture(i, "hold");
++            } else if (!on && r.pressed) {                                 // release
++                r.pressed = false;
++                if (r.hold_fired) {
++                    Gesture(i, "hold", 1);
++                } else if (r.tap_pending && now - r.last_up_us < kDoubleUs) {
++                    r.tap_pending = false;
++                    Gesture(i, "double");
++                } else {
++                    r.tap_pending = true;
++                    r.last_up_us = now;
++                }
++            }
++            if (r.tap_pending && !r.pressed && now - r.last_up_us >= kDoubleUs) {
++                r.tap_pending = false;
++                Gesture(i, "tap");
++            }
++            if (r.pressed && InputHasAffection(i)) stroking = true;
++        }
++        if (stroking) g_affection = std::min(1.0f, g_affection.load() + 0.004f);   // stroking keeps filling up
++        g_affection = std::max(0.0f, g_affection.load() - 1.0f / 45000);          // fades over ~30 minutes
++        // longing: ask to be touched now and then (only when some input gives affection)
++        bool any_affection = false;
++        for (int i = 0; i < g_in_count; i++) any_affection |= InputHasAffection(i);
++        const float since_min = (now - g_last_touch_us.load()) / 60e6f;
++        if (any_affection && g_screen && g_affection < 0.35f && since_min > 15 && now - last_crave > 10LL * 60 * 1000000 &&
++            Application::GetInstance().GetDeviceState() == kDeviceStateIdle) {
++            last_crave = now;
++            if (g_display) g_display->ShowEyeEmotion("sad", 6);
++            g_screen->ShowNotification("ПОТРОГАЙ АНТЕННЫ...", 6000);
++        }
++    }
++}
++
++bool InitInputs() {
++    const auto inputs = Hw().inputs;
++    bool any_touch = false;
++    for (auto& in : inputs) any_touch |= in.touch;
++    if (any_touch) {
++        static touch_sensor_sample_config_t sample[1] = {
++            TOUCH_SENSOR_V2_DEFAULT_SAMPLE_CONFIG(500, TOUCH_VOLT_LIM_L_0V5, TOUCH_VOLT_LIM_H_2V2)};
++        touch_sensor_config_t sens_cfg = TOUCH_SENSOR_DEFAULT_BASIC_CONFIG(1, sample);
++        if (touch_sensor_new_controller(&sens_cfg, &g_touch) != ESP_OK) return false;
++    }
++    touch_channel_config_t chan_cfg = {};
++    chan_cfg.active_thresh[0] = 2000;
++    chan_cfg.charge_speed = TOUCH_CHARGE_SPEED_7;
++    chan_cfg.init_charge_volt = TOUCH_INIT_CHARGE_VOLT_DEFAULT;
++    for (auto& in : inputs) {
++        if (g_in_count >= kMaxInputs) break;
++        auto& r = g_in[g_in_count];
++        r.pin = in.pin;
++        r.touch = in.touch;
++        if (in.touch) {
++            if (touch_sensor_new_channel(g_touch, in.pin, &chan_cfg, &r.chan) != ESP_OK) {
++                ESP_LOGE(TAG, "GPIO%d cannot be a touch input", in.pin);
++                continue;
++            }
++        } else {
++            gpio_config_t io = {};
++            io.pin_bit_mask = 1ULL << in.pin;
++            io.mode = GPIO_MODE_INPUT;
++            io.pull_up_en = GPIO_PULLUP_ENABLE;
++            gpio_config(&io);
++        }
++        if (auto p = Find(in.pin)) p->mode = Mode::Antenna;
++        ESP_LOGI(TAG, "input '%s' on GPIO%d (%s)", in.name.c_str(), in.pin, in.touch ? "touch" : "button");
++        g_in_count++;
++    }
++    if (any_touch) {
++        touch_sensor_filter_config_t filter = TOUCH_SENSOR_DEFAULT_FILTER_CONFIG();
++        touch_sensor_config_filter(g_touch, &filter);
++        if (touch_sensor_enable(g_touch) != ESP_OK) return false;
++        if (touch_sensor_start_continuous_scanning(g_touch) != ESP_OK) return false;
++    }
++    for (auto& o : Hw().outputs) {
++        gpio_config_t io = {};
++        io.pin_bit_mask = 1ULL << o.pin;
++        io.mode = GPIO_MODE_OUTPUT;
++        gpio_config(&io);
++        OutputSet(o, false);
++        if (auto p = Find(o.pin)) p->mode = Mode::Out;
++        g_outputs.push_back(o);
++    }
++    g_last_touch_us = esp_timer_get_time();
++    if (g_in_count) xTaskCreate(InputTask, "inputs", 4096, nullptr, 2, nullptr);
++    return true;
++}
++
++}  // namespace
++
++std::string AntennaStateJson() {
++    const float since = (esp_timer_get_time() - g_last_touch_us.load()) / 60e6f;
++    auto inputs = HwInputsSnapshot();
++    std::string s = "{\"inputs\":[";
++    bool touched = false;
++    for (int i = 0; i < g_in_count && i < (int)inputs.size(); i++) {
++        char buf[200];
++        snprintf(buf, sizeof(buf), "%s{\"name\":\"%s\",\"gpio\":%d,\"type\":\"%s\",\"pressed\":%s,\"raw\":%u,\"baseline\":%.0f}",
++                 i ? "," : "", inputs[i].name.c_str(), g_in[i].pin, g_in[i].touch ? "touch" : "button",
++                 g_in[i].pressed ? "true" : "false", (unsigned)g_in[i].raw.load(), g_in[i].base);
++        s += buf;
++        touched |= g_in[i].pressed;
++    }
++    char tail[160];
++    snprintf(tail, sizeof(tail), "],\"touched_now\":%s,\"touches_since_boot\":%d,\"minutes_since_last_touch\":%.1f,\"affection\":%.2f}",
++             touched ? "true" : "false", g_touches.load(), since, g_affection.load());
++    return s + tail;
++}
++
++void InitIo(Display* screen, CvEyesDisplay* eyes) {
++    g_screen = screen;
++    g_display = eyes;
++    for (size_t i = 0; i < sizeof(kUserPins) / sizeof(int); i++) g_pins[i] = {kUserPins[i], Mode::Free, -1};
++    if (!InitInputs()) ESP_LOGE(TAG, "inputs init failed");
++
++    auto& mcp = McpServer::GetInstance();
++    std::string pins_hint = " Free GPIOs:";
++    for (int p : kUserPins) {
++        auto* st = Find(p);
++        if (st && st->mode == Mode::Free) pins_hint += " " + std::to_string(p);
++    }
++    pins_hint += " (pins used by the hardware profile's inputs/outputs are excluded; GPIO2 is the power latch "
++                 "and must never be used).";
++    mcp.AddTool("self.gpio.list_pins", "List user GPIOs and what each is doing now." + pins_hint,
++        PropertyList(), [](const PropertyList&) -> ReturnValue { return ListPins(); });
++    mcp.AddTool("self.gpio.servo",
++        "Turn a hobby servo connected to a GPIO (signal wire) to `angle` degrees (0-180). "
++        "`min_us`/`max_us`: pulse width for 0 and 180 degrees (default 500/2500)." + pins_hint,
++        PropertyList({Property("pin", kPropertyTypeInteger), Property("angle", kPropertyTypeInteger, 0, 180),
++                      Property("min_us", kPropertyTypeInteger, 500, 300, 1500),
++                      Property("max_us", kPropertyTypeInteger, 2500, 1500, 3000)}),
++        [](const PropertyList& p) -> ReturnValue {
++            return Servo(p["pin"].value<int>(), p["angle"].value<int>(), p["min_us"].value<int>(), p["max_us"].value<int>());
++        });
++    mcp.AddTool("self.gpio.pwm",
++        "Output PWM on a GPIO (LED dimming, motor driver, buzzer tone). `frequency` in Hz, `duty` 0-100%." + pins_hint,
++        PropertyList({Property("pin", kPropertyTypeInteger), Property("frequency", kPropertyTypeInteger, 1000, 1, 40000),
++                      Property("duty", kPropertyTypeInteger, 0, 100)}),
++        [](const PropertyList& p) -> ReturnValue {
++            return Pwm(p["pin"].value<int>(), p["frequency"].value<int>(), p["duty"].value<int>());
++        });
++    mcp.AddTool("self.gpio.write", "Set a GPIO as digital output, `level` 0 or 1 (3.3 V)." + pins_hint,
++        PropertyList({Property("pin", kPropertyTypeInteger), Property("level", kPropertyTypeInteger, 0, 1)}),
++        [](const PropertyList& p) -> ReturnValue { return Write(p["pin"].value<int>(), p["level"].value<int>()); });
++    mcp.AddTool("self.gpio.read",
++        "Read a GPIO digital level (0/1). `pull`: none, up or down (for buttons use up)." + pins_hint,
++        PropertyList({Property("pin", kPropertyTypeInteger), Property("pull", kPropertyTypeString, std::string("none"))}),
++        [](const PropertyList& p) -> ReturnValue { return Read(p["pin"].value<int>(), p["pull"].value<std::string>()); });
++    mcp.AddTool("self.gpio.analog_read", "Read an analog voltage 0-3.1 V on GPIO1 or GPIO3.",
++        PropertyList({Property("pin", kPropertyTypeInteger)}),
++        [](const PropertyList& p) -> ReturnValue { return AnalogRead(p["pin"].value<int>()); });
++    mcp.AddTool("self.gpio.release", "Stop PWM/servo/output on a GPIO and leave it floating.",
++        PropertyList({Property("pin", kPropertyTypeInteger)}),
++        [](const PropertyList& p) -> ReturnValue {
++            std::lock_guard<std::mutex> lock(g_mu);
++            Release(Claim(p["pin"].value<int>()));
++            return true;
++        });
++    mcp.AddTool("self.antennae.get_state",
++        "The device's inputs (touch antennae, buttons) and its mood. It LOVES having its antennae touched: touches "
++        "raise `affection`, which slowly fades; when it is low the device feels lonely and wants to be touched.",
++        PropertyList(), [](const PropertyList&) -> ReturnValue { return AntennaStateJson(); });
++    mcp.AddTool("self.hw.reload",
++        "Download the hardware profile (display, pins, inputs and their actions, outputs, camera) from the voice "
++        "server and apply it. `url` defaults to http://<server>/device/hardware.json. Restarts if pins changed.",
++        PropertyList({Property("url", kPropertyTypeString, std::string(""))}),
++        [](const PropertyList& p) -> ReturnValue { return HwReload(p["url"].value<std::string>()); });
++    if (!g_outputs.empty()) {
++        std::string names;
++        for (auto& o : g_outputs) names += (names.empty() ? "" : ", ") + o.name + " (" + o.type + ", GPIO" + std::to_string(o.pin) + ")";
++        mcp.AddTool("self.outputs.set",
++            "Switch an output from the hardware profile on or off, or pulse it. Outputs: " + names +
++            ". `name`: output name, `state`: on, off or pulse; `ms`: pulse length.",
++            PropertyList({Property("name", kPropertyTypeString), Property("state", kPropertyTypeString),
++                          Property("ms", kPropertyTypeInteger, 300, 20, 5000)}),
++            [](const PropertyList& p) -> ReturnValue {
++                const std::string name = p["name"].value<std::string>(), st = p["state"].value<std::string>();
++                for (auto& o : g_outputs) {
++                    if (o.name != name) continue;
++                    if (st == "pulse") {
++                        OutputSet(o, true);
++                        vTaskDelay(pdMS_TO_TICKS(p["ms"].value<int>()));
++                        OutputSet(o, false);
++                    } else {
++                        OutputSet(o, st == "on");
++                    }
++                    return name + " -> " + st;
++                }
++                throw std::runtime_error("no output named " + name);
++            });
++        mcp.AddTool("self.vibrate", "Buzz the vibration motor(s) for `ms` milliseconds (e.g. to purr or alert).",
++            PropertyList({Property("ms", kPropertyTypeInteger, 300, 20, 3000)}),
++            [](const PropertyList& p) -> ReturnValue { Vibrate(p["ms"].value<int>()); return true; });
++    }
++}
++
++}  // namespace cv
+diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_io.h b/main/boards/zhengchen-1.54tft-wifi/cv_io.h
+new file mode 100644
+index 0000000..1c991d7
+--- /dev/null
++++ b/main/boards/zhengchen-1.54tft-wifi/cv_io.h
+@@ -0,0 +1,19 @@
++// User-facing GPIO tools (servo, PWM, digital, analog) and the touch "antennae".
++#pragma once
++
++#include <functional>
++#include <string>
++
++class CvEyesDisplay;
++class Display;
++
++namespace cv {
++
++// Pins the user may drive. Everything else is wired to the screen, audio, buttons,
++// battery, power latch (GPIO2), flash/PSRAM or USB/UART on this board.
++inline constexpr int kUserPins[] = {1, 3, 11, 12, 13, 14, 17, 18, 38, 47, 48};
++
++void InitIo(Display* screen, CvEyesDisplay* eyes);   // registers MCP tools, starts inputs/outputs (eyes may be null)
++std::string AntennaStateJson();        // also used to brief Claude about the device's "mood"
++
++}  // namespace cv
+diff --git a/main/boards/zhengchen-1.54tft-wifi/cv_skins.cc b/main/boards/zhengchen-1.54tft-wifi/cv_skins.cc
+new file mode 100644
+index 0000000..bd2036c
+--- /dev/null
++++ b/main/boards/zhengchen-1.54tft-wifi/cv_skins.cc
+@@ -0,0 +1,443 @@
++// Extra skins for cv::Eyes (port of proto/skins_render.js). Everything is drawn as phosphor
++// intensity into the 120x120 layer, so each skin can be recolored by its palette.
++#include "cv_eyes.h"
++#include "cv_font.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++
++namespace cv {
++
++namespace {
++constexpr float kPi = 3.14159265f;
++inline float clampf(float v, float a, float b) { return v < a ? a : (v > b ? b : v); }
++inline float sstep(float a, float b, float x) {
++    float t = clampf((x - a) / (b - a), 0, 1);
++    return t * t * (3 - 2 * t);
++}
++inline float fract(float v) { return v - floorf(v); }
++inline float fast_atan2(float y, float x) {
++    const float ax = fabsf(x), ay = fabsf(y);
++    const float mx = ax > ay ? ax : ay, mn = ax > ay ? ay : ax;
++    const float a = mn / (mx + 1e-9f), s = a * a;
++    float r = ((-0.0464964749f * s + 0.15931422f) * s - 0.327622764f) * s * a + a;
++    if (ay > ax) r = 1.57079637f - r;
++    if (x < 0) r = 3.14159274f - r;
++    return y < 0 ? -r : r;
++}
++inline float sd_round_rect(float px, float py, float hw, float hh, float r) {
++    const float qx = fabsf(px) - hw + r, qy = fabsf(py) - hh + r;
++    const float ox = qx > 0 ? qx : 0, oy = qy > 0 ? qy : 0;
++    return sqrtf(ox * ox + oy * oy) + std::min(std::max(qx, qy), 0.0f) - r;
++}
++std::u32string U(const char* s) { return Utf8ToU32(s); }
++
++// word-wrap to `cols`, keep the last `max_lines`
++int Wrap(const std::u32string& s, int cols, std::u32string* lines, int max_lines) {
++    std::u32string all[24];
++    int n = 0;
++    std::u32string cur, word;
++    auto push = [&](const std::u32string& l) {
++        if (n < 24) all[n++] = l;
++        else { for (int i = 1; i < 24; i++) all[i - 1] = all[i]; all[23] = l; }
++    };
++    auto flush = [&]() {
++        if (word.empty()) return;
++        if (!cur.empty() && cur.size() + 1 + word.size() > (size_t)cols) { push(cur); cur.clear(); }
++        while (word.size() > (size_t)cols) { push(word.substr(0, cols)); word = word.substr(cols); }
++        if (!cur.empty()) cur += U' ';
++        cur += word;
++        word.clear();
++    };
++    for (char32_t c : s) { if (c == U' ' || c == U'\n') flush(); else word += c; }
++    flush();
++    if (!cur.empty()) push(cur);
++    const int first = std::max(0, n - max_lines);
++    for (int i = first; i < n; i++) lines[i - first] = all[i];
++    return n - first;
++}
++}  // namespace
++
++#define PUT(x, y, v) do { const int _x = (int)lroundf(x), _y = (int)lroundf(y); \
++    if (_x >= 0 && _y >= 0 && _x < LW && _y < LH) { int _v = (int)(v); if (_v > 255) _v = 255; \
++    uint8_t& _p = phos_[_y * LW + _x]; if (_v > _p) _p = (uint8_t)_v; } } while (0)
++
++void Eyes::Dot(float cx, float cy, float r, float v) {
++    for (int y = (int)floorf(cy - r - 1); y <= cy + r + 1; y++) {
++        for (int x = (int)floorf(cx - r - 1); x <= cx + r + 1; x++) {
++            const float a = 1 - sstep(r - 0.6f, r + 0.6f, sqrtf((x - cx) * (x - cx) + (y - cy) * (y - cy)));
++            if (a > 0.01f) PUT(x, y, v * a);
++        }
++    }
++}
++
++void Eyes::RingPx(float cx, float cy, float r, float v) {
++    const int n = (int)ceilf(r * 6.4f);
++    for (int i = 0; i < n; i++) {
++        const float a = i / (float)n * kPi * 2;
++        PUT(cx + cosf(a) * r, cy + sinf(a) * r, v);
++    }
++}
++
++// ---------------- ORB: modern voice assistant ----------------
++void Eyes::DrawOrb() {
++    const EyeState s = state_;
++    const Emotion e = emotion_;
++    const float L = level_, t = t_;
++    const float cx = 60 + (gx_ + mx_) * 5;
++    const float cy = 50 + (gy_ + my_) * 3 + (e == Emotion::Happy ? sinf(t * 7) * 1.5f : 0) + (e == Emotion::Sad ? 4 : 0);
++    float R = 20 * (1 + 0.05f * sinf(t * 1.7f)) * (1 + 0.3f * L);
++    if (s == EyeState::Listening) R *= 1.1f;
++    if (s == EyeState::Sleep) R *= 0.55f;
++    if (s == EyeState::Thinking) R *= 0.9f;
++    if (e == Emotion::Surprised) R *= 1.15f;
++    R *= 1 - 0.12f * blink_;
++    const float spike = e == Emotion::Angry ? 0.13f : 0.04f;
++    const float br = bright_ * (s == EyeState::Error ? 0.6f + 0.4f * Rnd(0, 1) : 1);
++    // per-frame tables: shape by angle, glow by normalized distance
++    float shape[64];
++    for (int i = 0; i < 64; i++) {
++        const float a = i / 64.0f * kPi * 2 - kPi;
++        shape[i] = 1 + spike * sinf(3 * a + t * 1.3f) + 0.035f * sinf(5 * a - t * 2.1f) + 0.09f * L * sinf(7 * a + t * 11);
++    }
++    static float glow[192];
++    static bool glow_ready = false;
++    if (!glow_ready) {
++        for (int i = 0; i < 192; i++) {
++            const float q = i / 64.0f;
++            float v = 235 * expf(-q * q * 2.4f) + 60 * expf(-q * 1.5f);
++            if (q < 0.45f) v += 40 * (1 - q / 0.45f);
++            glow[i] = v;
++        }
++        glow_ready = true;
++    }
++    const float ext = R * 2.4f;
++    const int y0 = std::max(0, (int)floorf(cy - ext)), y1 = std::min(LH - 1, (int)ceilf(cy + ext));
++    const int x0 = std::max(0, (int)floorf(cx - ext)), x1 = std::min(LW - 1, (int)ceilf(cx + ext));
++    // The orb is soft: evaluate every other pixel and fill 2x2 blocks (smooth upscale hides it).
++    const float rmin = R * (1 - spike - 0.035f - 0.09f * L), far2 = (rmin * 3) * (rmin * 3);
++    for (int y = y0 & ~1; y <= y1; y += 2) {
++        for (int x = x0 & ~1; x <= x1; x += 2) {
++            const float dx = x + 0.5f - cx, dy = y + 0.5f - cy, d2 = dx * dx + dy * dy;
++            if (d2 > far2) continue;
++            const float d = sqrtf(d2);
++            const float a = fast_atan2(dy, dx);
++            const int bin = ((int)((a + kPi) / (2 * kPi) * 64)) & 63;
++            const int qi = (int)(d / (R * shape[bin]) * 64);
++            if (qi >= 192) continue;
++            const int v = (int)(glow[qi] * br);
++            if (v <= 2) continue;
++            const uint8_t vv = (uint8_t)(v > 255 ? 255 : v);
++            for (int yy = y; yy < y + 2 && yy < LH; yy++) {
++                for (int xx = x; xx < x + 2 && xx < LW; xx++) {
++                    uint8_t& p = phos_[yy * LW + xx];
++                    if (vv > p) p = vv;
++                }
++            }
++        }
++    }
++    if (s == EyeState::Listening || s == EyeState::Speaking) {
++        for (int k = 0; k < 3; k++) {
++            const float p = fract(t * (s == EyeState::Speaking ? 0.9f : 0.55f) + k / 3.0f);
++            RingPx(cx, cy, R * (1.15f + p * 1.1f), (1 - p) * (90 + 120 * L) * br);
++        }
++    }
++    if (s == EyeState::Thinking || s == EyeState::Connecting) {
++        for (int k = 0; k < 2; k++) {
++            const float ang = t * 3.2f + k * kPi;
++            for (int j = 0; j < 22; j++) {
++                const float aa = ang - j * 0.06f, rad = R * 1.45f;
++                Dot(cx + cosf(aa) * rad, cy + sinf(aa) * rad, 1.6f, (1 - j / 22.0f) * 220 * br);
++            }
++        }
++    }
++}
++
++// ---------------- PET: soft expressive robot eyes ----------------
++void Eyes::DrawPet() {
++    const EyeState s = state_;
++    const Emotion e = emotion_;
++    const float L = level_;
++    const float gx = (gx_ + mx_) * 11, gy = (gy_ + my_) * 7;
++    for (int side = -1; side <= 1; side += 2) {
++        float w = 12.5f, h = 15, cy = 48 + gy;
++        const float cx = 60 + side * 23 + gx;
++        if (s == EyeState::Listening) { w *= 1.05f; h *= 1.08f + 0.06f * L; }
++        if (s == EyeState::Speaking) { h *= 1 - 0.1f * L; w *= 1 + 0.05f * L; }
++        if (e == Emotion::Surprised) { h *= 1.22f; w *= 0.95f; }
++        if (e == Emotion::Sleepy || s == EyeState::Sleep) { h *= 0.32f; cy += 7; }
++        if (s == EyeState::Thinking && side == 1) h *= 0.75f;
++        if (gx * side > 0) { const float k = 1 + 0.1f * fabsf(gx) / 11; w *= k; h *= k; }
++        h *= 1 - 0.93f * blink_;
++        const float r = std::min(w, h) * 0.62f;
++        const int inner = -side;
++        for (int y = (int)floorf(cy - h - 2); y <= cy + h + 2; y++) {
++            for (int x = (int)floorf(cx - w - 2); x <= cx + w + 2; x++) {
++                const float dx = x - cx, dy = y - cy;
++                float a = 1 - sstep(-0.8f, 0.8f, sd_round_rect(dx, dy, w, h, r));
++                if (a <= 0) continue;
++                const float nx = clampf(dx / w, -1, 1), inn = (nx * inner + 1) / 2;
++                float top = -h - 1, bot = h + 1;
++                if (e == Emotion::Angry) top = -h + h * 1.1f * inn;
++                if (e == Emotion::Sad) top = -h + h * 1.0f * (1 - inn);
++                if (e == Emotion::Happy) bot = h - h * 1.35f * (1 - nx * nx);
++                a *= sstep(top - 0.8f, top + 0.8f, dy) * (1 - sstep(bot - 0.8f, bot + 0.8f, dy));
++                const float shade = 0.82f + 0.18f * (1 - (dy + h) / (2 * h));
++                if (a > 0.01f) PUT(x, y, 235 * a * shade * bright_);
++            }
++        }
++    }
++    if (s == EyeState::Speaking || e == Emotion::Happy) {
++        const float mh = s == EyeState::Speaking ? 1 + L * 4 : 1.2f, mw = e == Emotion::Happy ? 8 : 6;
++        for (int y = 72; y <= 84; y++) {
++            for (int x = (int)(60 - mw - 2); x <= 60 + mw + 2; x++) {
++                const float a = 1 - sstep(-0.8f, 0.8f, sd_round_rect(x - 60 - gx * 0.3f, y - 78 - gy * 0.3f, mw, mh, std::min(mw, mh)));
++                if (a > 0.01f) PUT(x, y, 200 * a * bright_);
++            }
++        }
++    }
++}
++
++// ---------------- MINIMAL: two dots and a living line ----------------
++void Eyes::DrawMinimal() {
++    const EyeState s = state_;
++    const Emotion e = emotion_;
++    const float L = level_, t = t_;
++    const float gx = (gx_ + mx_) * 6, gy = (gy_ + my_) * 4;
++    float rad = 4.5f * (s == EyeState::Listening ? 1.15f + 0.25f * L : 1);
++    if (e == Emotion::Surprised) rad *= 1.3f;
++    for (int side = -1; side <= 1; side += 2) {
++        const float cx = 60 + side * 17 + gx, cy = 50 + gy;
++        const float ry = rad * (1 - 0.85f * blink_) * ((e == Emotion::Sleepy || s == EyeState::Sleep) ? 0.3f : 1);
++        for (int y = (int)floorf(cy - rad - 2); y <= cy + rad + 2; y++) {
++            for (int x = (int)floorf(cx - rad - 2); x <= cx + rad + 2; x++) {
++                const float qx = (x - cx) / rad, qy = (y - cy) / std::max(0.6f, ry);
++                const float a = 1 - sstep(0.85f, 1.15f, sqrtf(qx * qx + qy * qy));
++                if (a > 0.01f) PUT(x, y, 240 * a * bright_);
++            }
++        }
++    }
++    const float y0 = 70 + gy * 0.5f;
++    if (s == EyeState::Thinking || s == EyeState::Connecting) {
++        for (int k = 0; k < 3; k++) {
++            const float b = 0.5f + 0.5f * sinf(t * 6 - k * 0.9f);
++            Dot(52 + k * 8 + gx * 0.5f, y0, 1.5f + b, (120 + 120 * b) * bright_);
++        }
++        return;
++    }
++    for (float x = 42; x <= 78; x += 0.5f) {
++        const float u = (x - 60) / 18, env = cosf(u * kPi / 2);
++        float y = y0;
++        if (e == Emotion::Happy) y += 4 * (1 - u * u);
++        if (e == Emotion::Sad) y -= 3 * (1 - u * u);
++        if (s == EyeState::Speaking || s == EyeState::Listening) y += sinf(x * 0.55f - t * 14) * L * 6 * env;
++        Dot(x + gx * 0.5f, y, 1.1f, 200 * env * bright_ + 30);
++    }
++}
++
++// ---------------- HOLO: holographic AI core ----------------
++void Eyes::DrawHoloCore() {
++    const EyeState s = state_;
++    const float L = level_, t = t_, rot = iris_rot_, br = bright_;
++    const float cx = 60 + (gx_ + mx_) * 4, cy = 54 + (gy_ + my_) * 3;
++    const float grow = s == EyeState::Listening ? 2 + L * 3 : L * 2;
++    const bool radar = s == EyeState::Thinking || s == EyeState::Connecting;
++    const int y0 = std::max(0, (int)floorf(cy - 44)), y1 = std::min(LH - 1, (int)ceilf(cy + 44));
++    const int x0 = std::max(0, (int)floorf(cx - 44)), x1 = std::min(LW - 1, (int)ceilf(cx + 44));
++    for (int y = y0; y <= y1; y++) {
++        for (int x = x0; x <= x1; x++) {
++            const float dx = x - cx, dy = y - cy, d = sqrtf(dx * dx + dy * dy);
++            if (d > 43) continue;
++            float v = 0;
++            if (d < 7 + L * 2) v = 240 - d * 8;
++            if (fabsf(d - 10) < 0.7f) v = std::max(v, 150.0f);
++            const bool need_a = fabsf(d - 16) < 1 || (d > 21 && d < 25) || fabsf(d - (31 + grow)) < 1.3f ||
++                                (s == EyeState::Speaking && d > 6 && d < 19) || (radar && d > 10 && d < 39);
++            if (need_a) {
++                const float a = fast_atan2(dy, dx), an = a / (2 * kPi);
++                if (fabsf(d - 16) < 1 && fract(fract(an + rot / (2 * kPi)) * 24) < 0.6f) v = std::max(v, 140 + 80 * L);
++                if (d > 21 && d < 25) {
++                    const float p = fract(an - rot * 0.5f / (2 * kPi));
++                    if (fract(p * 36) < 0.18f) v = std::max(v, fract(p * 12) < 0.08f ? 220.0f : 110.0f);
++                }
++                if (fabsf(d - (31 + grow)) < 1.3f) {
++                    const float p = fract(an + rot * 0.8f / (2 * kPi));
++                    if (p < 0.14f || (p > 0.33f && p < 0.55f) || (p > 0.7f && p < 0.78f)) v = std::max(v, 210.0f);
++                }
++                if (s == EyeState::Speaking) {
++                    const float rw = 12.5f + L * 5 * sinf(10 * a + t * 25);
++                    if (fabsf(d - rw) < 0.8f) v = std::max(v, 230.0f);
++                }
++                if (radar && d > 10 && d < 39) {
++                    const float diff = fract(t * 1.6f - an);
++                    if (diff < 0.18f) v = std::max(v, (1 - diff / 0.18f) * 120);
++                }
++            }
++            if (fabsf(d - 39) < 0.6f) v = std::max(v, 70.0f);
++            if (v > 0) PUT(x, y, v * br);
++        }
++    }
++    for (int k = 0; k < 4; k++) {
++        const float a = k * kPi / 2 + rot * 0.2f;
++        Dot(cx + cosf(a) * 41.5f, cy + sinf(a) * 41.5f, 1.4f, 200 * br);
++    }
++}
++
++// ---------------- PIXEL: 8-bit game eyes ----------------
++void Eyes::DrawPixel() {
++    const EyeState s = state_;
++    const Emotion e = emotion_;
++    const float L = level_;
++    constexpr int B = 6;
++    auto block = [&](int bx, int by, int v) {
++        for (int y = 0; y < B - 1; y++) for (int x = 0; x < B - 1; x++) PUT(bx * B + x, by * B + y, v);
++    };
++    static const char* kOpen[5] = {"0110", "1111", "1111", "1111", "0110"};
++    static const char* kHappy[5] = {"0000", "0110", "1001", "0000", "0000"};
++    static const char* kSad[5] = {"0000", "0000", "1111", "1111", "0110"};
++    static const char* kAngryL[5] = {"1000", "1100", "1110", "1111", "0110"};
++    static const char* kAngryR[5] = {"0001", "0011", "0111", "1111", "0110"};
++    static const char* kClosed[5] = {"0000", "0000", "0000", "1111", "0000"};
++    static const char* kWide[5] = {"1111", "1111", "1111", "1111", "1111"};
++    const int px = (int)lroundf(clampf((gx_ + mx_) * 1.6f, -1, 1)), py = (int)lroundf(clampf((gy_ + my_) * 1.6f, -1, 1));
++    for (int side = -1; side <= 1; side += 2) {
++        const char* const* sh = kOpen;
++        if (e == Emotion::Happy) sh = kHappy;
++        else if (e == Emotion::Sad) sh = kSad;
++        else if (e == Emotion::Angry) sh = side < 0 ? kAngryL : kAngryR;
++        else if (e == Emotion::Surprised) sh = kWide;
++        if (blink_ > 0.5f || e == Emotion::Sleepy || s == EyeState::Sleep) sh = kClosed;
++        const bool pupil = sh != kHappy && sh != kClosed;
++        const int ox = side < 0 ? 4 : 12, oy = 5;
++        for (int r = 0; r < 5; r++) {
++            for (int c = 0; c < 4; c++) {
++                if (sh[r][c] != '1') continue;
++                const bool is_pupil = pupil && (c == 1 + px || c == 2 + px) && (r == 2 + py || r == 3 + py) && r >= 1;
++                block(ox + c, oy + r, is_pupil ? 40 : (int)(230 * bright_));
++            }
++        }
++    }
++    static const char* kTalk3[3] = {"0111110", "1000001", "0111110"};
++    static const char* kTalk2[2] = {"0111110", "0111110"};
++    static const char* kLine[1] = {"0111110"};
++    static const char* kSmile[2] = {"1000001", "0111110"};
++    static const char* kFrown[2] = {"0111110", "1000001"};
++    static const char* kDots[1] = {"0101010"};
++    static const char* kRest[1] = {"0011100"};
++    const char* const* m = kRest;
++    int rows = 1;
++    if (s == EyeState::Speaking) { if (L > 0.55f) { m = kTalk3; rows = 3; } else if (L > 0.2f) { m = kTalk2; rows = 2; } else m = kLine; }
++    else if (e == Emotion::Happy) { m = kSmile; rows = 2; }
++    else if (e == Emotion::Sad) { m = kFrown; rows = 2; }
++    else if (s == EyeState::Thinking) m = kDots;
++    for (int r = 0; r < rows; r++) for (int c = 0; c < 7; c++) if (m[r][c] == '1') block(6 + c, 13 + r, (int)(210 * bright_));
++}
++
++// ---------------- EYE: one realistic eye ----------------
++void Eyes::DrawRealEye() {
++    const EyeState s = state_;
++    const Emotion e = emotion_;
++    const float cx = 60, cy = 50, A = 40, Bv = 23;
++    float open = 1;
++    if (s == EyeState::Sleep || e == Emotion::Sleepy) open = 0.28f;
++    if (e == Emotion::Surprised) open = 1.22f;
++    if (s == EyeState::Listening) open = 1.08f;
++    open *= 1 - blink_;
++    const float lower = e == Emotion::Happy ? 0.55f : 1;
++    const float Ri = 14, gx = (gx_ + mx_) * A * 0.42f, gy = (gy_ + my_) * Bv * 0.4f;
++    const float pr = Ri * (0.26f + 0.28f * pupil_);
++    const float tilt = e == Emotion::Angry ? 0.25f : e == Emotion::Sad ? -0.2f : 0;
++    for (int x = (int)(cx - A - 3); x <= cx + A + 3; x++) {
++        const float dx = x - cx, nx = dx / A;
++        if (fabsf(nx) > 1) continue;
++        const float shape = powf(1 - nx * nx, 0.62f);
++        const float up = -Bv * open * shape + tilt * dx * 0.3f, lo = Bv * 0.95f * lower * shape;
++        for (int y = (int)floorf(cy - Bv * 1.4f - 4); y <= cy + Bv * 1.3f; y++) {
++            const float dy = y - cy, du = dy - up, dl = lo - dy;
++            if (du < 0 && du > -5 && fabsf(nx) < 0.9f) {
++                if (((x + 400) % 4 == 0) && du > -4 * (1 - fabsf(nx) * 0.7f)) PUT(x + lroundf(nx * 2 * (du / 4)), y, 110 * bright_);
++            }
++            if (fabsf(du) < 0.9f && fabsf(nx) < 0.98f) PUT(x, y, 150 * bright_);
++            if (du < 0 || dl < 0) continue;
++            float v = 150 * (1 - 0.55f * (nx * nx + (dy / Bv) * (dy / Bv)));
++            v *= 0.55f + 0.45f * sstep(0, 6, du);
++            const float ix = dx - gx, iy = dy - gy, ir = sqrtf(ix * ix + iy * iy);
++            if (ir < Ri) {
++                const float a = fast_atan2(iy, ix), rn = ir / Ri;
++                const float fib = 0.55f + 0.45f * (0.5f + 0.5f * sinf(a * 23 + sinf(a * 7) * 2 + rn * 6)) *
++                                              (0.65f + 0.35f * sinf(a * 41 + rn * 11));
++                const float ring = (rn - 0.5f) / 0.12f;
++                float iv = (70 + 120 * fib) * (0.75f + 0.5f * expf(-ring * ring));
++                if (rn > 0.86f) iv *= 1 - (rn - 0.86f) / 0.14f * 0.75f;
++                if (ir < pr) iv = 6;
++                else if (ir < pr + 1) iv = std::min(iv, 40.0f);
++                v = iv * (0.6f + 0.4f * sstep(0, 7, du));
++            }
++            const float h1x = ix + Ri * 0.38f, h1y = iy + Ri * 0.42f, h1 = sqrtf(h1x * h1x + h1y * h1y);
++            const float h2x = ix - Ri * 0.3f, h2y = iy - Ri * 0.38f, h2 = sqrtf(h2x * h2x + h2y * h2y);
++            if (h1 < 3.2f) v = std::max(v, 255 * (1 - h1 / 3.2f) + 120);
++            if (h2 < 1.4f) v = std::max(v, 200.0f);
++            PUT(x, y, v * bright_);
++        }
++    }
++}
++
++// ---------------- text layouts ----------------
++void Eyes::DrawHudMinimal() {
++    const uint8_t hi = 235, dim = 120;
++    const char* kStatus[] = {"", "слушаю", "думаю", "", "подключение", "нет связи", ""};
++    std::u32string st = notification_left_ > 0 ? notification_ : U(kStatus[(int)state_]);
++    if (st.size() > 28) st.resize(28);
++    if (!st.empty()) DrawText(st, (SW - CV_FONT_W * (int)st.size()) / 2, 8, dim);
++    std::u32string shown = message_.substr(0, (size_t)message_shown_);
++    std::u32string lines[2];
++    const int n = Wrap(shown, 26, lines, 2);
++    for (int i = 0; i < n; i++) {
++        DrawText(lines[i], (SW - CV_FONT_W * (int)lines[i].size()) / 2, 206 + i * 14, role_ == Role::User ? dim : hi);
++    }
++}
++
++void Eyes::DrawHudHolo() {
++    const uint8_t hi = 230, dim = 130;
++    std::u32string head = header_;
++    if (head.size() > 18) head.resize(18);
++    DrawText(head, 6, 4, hi);
++    DrawText(unit_, 6, 16, dim);
++    if (battery_ >= 0) {
++        std::u32string b = (charging_ ? U"+" : U"") + U(std::to_string(battery_).c_str()) + U"%";
++        DrawText(b, SW - 6 - CV_FONT_W * (int)b.size(), 4, dim);
++    }
++    const char* kEn[] = {"STANDBY", "LISTENING", "ANALYSIS", "OUTPUT", "LINK", "NO SIGNAL", "SLEEP"};
++    std::u32string st = notification_left_ > 0 ? notification_ : U(kEn[(int)state_]);
++    if (st.size() > 14) st.resize(14);
++    DrawText(st, SW - 6 - CV_FONT_W * (int)st.size(), 16, dim);
++    if (hexh_t_ < 0 || t_ - hexh_t_ > 0.4f) {
++        hexh_t_ = t_;
++        for (auto& h : hexh_) {
++            char buf[8];
++            snprintf(buf, sizeof(buf), "%04X", (unsigned)(Rand() & 0xffff));
++            h = U(buf);
++        }
++    }
++    for (int i = 0; i < 4; i++) {
++        DrawText(hexh_[i], 4, 70 + i * 13, 90);
++        std::u32string r(hexh_[i].rbegin(), hexh_[i].rend());
++        DrawText(r, SW - 36, 70 + i * 13, 90);
++    }
++    DrawMessage(208, 2, false);
++}
++
++void Eyes::DrawHudPixel() {
++    const char* kEn[] = {"READY", "LISTEN", "WAIT...", "TALK", "LOADING", "GAME OVER", "ZZZ"};
++    std::u32string st = notification_left_ > 0 ? notification_ : U(kEn[(int)state_]);
++    if (st.size() > 28) st.resize(28);
++    DrawText(st, (SW - CV_FONT_W * (int)st.size()) / 2, 4, 200);
++    DrawMessage(208, 2, false);
++}
++
++#undef PUT
++
++}  // namespace cv
+diff --git a/main/boards/zhengchen-1.54tft-wifi/power_manager.h b/main/boards/zhengchen-1.54tft-wifi/power_manager.h
+index de6e82d..329058c 100644
+--- a/main/boards/zhengchen-1.54tft-wifi/power_manager.h
++++ b/main/boards/zhengchen-1.54tft-wifi/power_manager.h
+@@ -34,7 +34,7 @@ private:
+ 
+     void CheckBatteryStatus() {
+         // Get charging status
+-        bool new_charging_status = gpio_get_level(charging_pin_) == 1;
++        bool new_charging_status = charging_pin_ != GPIO_NUM_NC && gpio_get_level(charging_pin_) == 1;
+         if (new_charging_status != is_charging_) {
+             is_charging_ = new_charging_status;
+             if (on_charging_status_changed_) {
+@@ -144,7 +144,7 @@ public:
+         gpio_config_t io_conf = {};
+         io_conf.intr_type = GPIO_INTR_DISABLE;
+         io_conf.mode = GPIO_MODE_INPUT;
+-        io_conf.pin_bit_mask = (1ULL << charging_pin_);
++        io_conf.pin_bit_mask = charging_pin_ == GPIO_NUM_NC ? 0 : (1ULL << charging_pin_);
+         io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE; 
+         io_conf.pull_up_en = GPIO_PULLUP_DISABLE;     
+         gpio_config(&io_conf);
+diff --git a/main/boards/zhengchen-1.54tft-wifi/zhengchen-1.54tft-wifi.cc b/main/boards/zhengchen-1.54tft-wifi/zhengchen-1.54tft-wifi.cc
+index 5f7c305..93a8abf 100644
+--- a/main/boards/zhengchen-1.54tft-wifi/zhengchen-1.54tft-wifi.cc
++++ b/main/boards/zhengchen-1.54tft-wifi/zhengchen-1.54tft-wifi.cc
+@@ -1,6 +1,6 @@
+ #include "wifi_board.h"
+ #include "codecs/no_audio_codec.h"
+-#include "zhengchen_lcd_display.h"
++#include "cv_eyes_display.h"
+ #include "system_reset.h"
+ #include "application.h"
+ #include "button.h"
+@@ -9,9 +9,21 @@
+ #include "led/single_led.h"
+ #include "assets/lang_config.h"
+ #include "power_manager.h"
++#include "mcp_server.h"
++#include "cv_io.h"
++#include "settings.h"
++#include "cv_hw.h"
++#include "esp32_camera.h"
++#include "display/oled_display.h"
+ 
+ #include <esp_log.h>
+ #include <esp_lcd_panel_vendor.h>
++#include <esp_lcd_panel_ssd1306.h>
++#include <driver/i2c_master.h>
++#include "esp_lcd_gc9a01.h"
++#include "esp_lcd_ili9341.h"
++#include "esp_lcd_st7796.h"
++#include "esp_lcd_panel_sh1106.h"
+ 
+ #include <driver/rtc_io.h>
+ #include <esp_sleep.h>
+@@ -23,16 +35,17 @@ private:
+     Button boot_button_;
+     Button volume_up_button_;
+     Button volume_down_button_;
+-    ZHENGCHEN_LcdDisplay* display_;
++    Display* display_ = nullptr;          // whatever screen the hardware profile describes
++    CvEyesDisplay* eyes_ = nullptr;       // the animated eyes (colour SPI screens only)
+     PowerSaveTimer* power_save_timer_;
+     PowerManager* power_manager_;
+     esp_lcd_panel_io_handle_t panel_io_ = nullptr;
+     esp_lcd_panel_handle_t panel_ = nullptr;
+ 
+     void InitializePowerManager() {
+-        power_manager_ = new PowerManager(GPIO_NUM_9);
++        power_manager_ = new PowerManager(PinOrNc(cv::Hw().charge_detect));
+         power_manager_->OnTemperatureChanged([this](float chip_temp) {
+-            display_->UpdateHighTempWarning(chip_temp);
++            if (eyes_) eyes_->UpdateHighTempWarning(chip_temp);
+         });
+ 
+         power_manager_->OnChargingStatusChanged([this](bool is_charging) {
+@@ -48,33 +61,25 @@ private:
+     }
+ 
+     void InitializePowerSaveTimer() {
+-        rtc_gpio_init(GPIO_NUM_2);
+-        rtc_gpio_set_direction(GPIO_NUM_2, RTC_GPIO_MODE_OUTPUT_ONLY);
+-        rtc_gpio_set_level(GPIO_NUM_2, 1);
++        const gpio_num_t latch = PinOrNc(cv::Hw().power_latch);   // keeps the battery power on
++        if (latch != GPIO_NUM_NC && rtc_gpio_is_valid_gpio(latch)) {
++            rtc_gpio_init(latch);
++            rtc_gpio_set_direction(latch, RTC_GPIO_MODE_OUTPUT_ONLY);
++            rtc_gpio_set_level(latch, 1);
++        }
+ 
+         power_save_timer_ = new PowerSaveTimer(-1, 60, 300);
+         power_save_timer_->OnEnterSleepMode([this]() {
+             GetDisplay()->SetPowerSaveMode(true);
+-            GetBacklight()->SetBrightness(1);
++            if (GetBacklight()) GetBacklight()->SetBrightness(1);
+         });
+         power_save_timer_->OnExitSleepMode([this]() {
+             GetDisplay()->SetPowerSaveMode(false);
+-            GetBacklight()->RestoreBrightness();
++            if (GetBacklight()) GetBacklight()->RestoreBrightness();
+         });
+         power_save_timer_->SetEnabled(true);
+     }
+ 
+-    void InitializeSpi() {
+-        spi_bus_config_t buscfg = {};
+-        buscfg.mosi_io_num = DISPLAY_SDA;
+-        buscfg.miso_io_num = GPIO_NUM_NC;
+-        buscfg.sclk_io_num = DISPLAY_SCL;
+-        buscfg.quadwp_io_num = GPIO_NUM_NC;
+-        buscfg.quadhd_io_num = GPIO_NUM_NC;
+-        buscfg.max_transfer_sz = DISPLAY_WIDTH * DISPLAY_HEIGHT * sizeof(uint16_t);
+-        ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
+-    }
+-
+     void InitializeButtons() {
+         
+         boot_button_.OnClick([this]() {
+@@ -136,67 +141,233 @@ private:
+         });
+     }
+ 
+-    void InitializeSt7789Display() {
+-        ESP_LOGD(TAG, "Install panel IO");
++    static gpio_num_t PinOrNc(int pin) { return pin < 0 ? GPIO_NUM_NC : (gpio_num_t)pin; }
++
++    // Builds the screen from the hardware profile (driver, resolution, pins). See cv_hw.h.
++    void InitializeDisplay() {
++        const auto& d = cv::Hw().display;
++        if (d.driver == "none") {
++            display_ = new NoDisplay();
++            return;
++        }
++        if (d.IsOled()) {
++            InitializeOled(d);
++            return;
++        }
++        spi_bus_config_t buscfg = {};
++        buscfg.mosi_io_num = PinOrNc(d.mosi);
++        buscfg.miso_io_num = GPIO_NUM_NC;
++        buscfg.sclk_io_num = PinOrNc(d.sclk);
++        buscfg.quadwp_io_num = GPIO_NUM_NC;
++        buscfg.quadhd_io_num = GPIO_NUM_NC;
++        buscfg.max_transfer_sz = d.width * d.height * sizeof(uint16_t);
++        ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
++
+         esp_lcd_panel_io_spi_config_t io_config = {};
+-        io_config.cs_gpio_num = DISPLAY_CS;
+-        io_config.dc_gpio_num = DISPLAY_DC;
+-        io_config.spi_mode = 3;
+-        io_config.pclk_hz = 80 * 1000 * 1000;
++        io_config.cs_gpio_num = PinOrNc(d.cs);
++        io_config.dc_gpio_num = PinOrNc(d.dc);
++        io_config.spi_mode = d.spi_mode;
++        io_config.pclk_hz = d.pclk_mhz * 1000 * 1000;
+         io_config.trans_queue_depth = 10;
+         io_config.lcd_cmd_bits = 8;
+         io_config.lcd_param_bits = 8;
+         ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(SPI3_HOST, &io_config, &panel_io_));
+ 
+-        ESP_LOGD(TAG, "Install LCD driver");
+         esp_lcd_panel_dev_config_t panel_config = {};
+-        panel_config.reset_gpio_num = DISPLAY_RES;
+-        panel_config.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB;
++        panel_config.reset_gpio_num = PinOrNc(d.rst);
++        panel_config.rgb_ele_order = d.bgr ? LCD_RGB_ELEMENT_ORDER_BGR : LCD_RGB_ELEMENT_ORDER_RGB;
+         panel_config.bits_per_pixel = 16;
+-        ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(panel_io_, &panel_config, &panel_));
+-        ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_));
+-        ESP_ERROR_CHECK(esp_lcd_panel_init(panel_));
+-        ESP_ERROR_CHECK(esp_lcd_panel_swap_xy(panel_, DISPLAY_SWAP_XY));
+-        ESP_ERROR_CHECK(esp_lcd_panel_mirror(panel_, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y));
+-        ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel_, true));
++        esp_err_t err;
++        if (d.driver == "gc9a01") err = esp_lcd_new_panel_gc9a01(panel_io_, &panel_config, &panel_);
++        else if (d.driver == "ili9341") err = esp_lcd_new_panel_ili9341(panel_io_, &panel_config, &panel_);
++        else if (d.driver == "st7796") err = esp_lcd_new_panel_st7796(panel_io_, &panel_config, &panel_);
++        else err = esp_lcd_new_panel_st7789(panel_io_, &panel_config, &panel_);
++        if (err != ESP_OK) {
++            ESP_LOGE(TAG, "display driver %s failed: %s", d.driver.c_str(), esp_err_to_name(err));
++            display_ = new NoDisplay();
++            return;
++        }
++        esp_lcd_panel_reset(panel_);
++        esp_lcd_panel_init(panel_);
++        esp_lcd_panel_swap_xy(panel_, d.swap_xy);
++        esp_lcd_panel_mirror(panel_, d.mirror_x, d.mirror_y);
++        esp_lcd_panel_invert_color(panel_, d.invert);
++        esp_lcd_panel_disp_on_off(panel_, true);
++
++        eyes_ = new CvEyesDisplay(panel_io_, panel_, d.width, d.height, d.offset_x, d.offset_y,
++                                  d.mirror_x, d.mirror_y, d.swap_xy);
++        eyes_->SetupHighTempWarningPopup();
++        display_ = eyes_;
++    }
++
++    void InitializeOled(const cv::HwDisplay& d) {
++        i2c_master_bus_handle_t bus = nullptr;
++        i2c_master_bus_config_t bus_config = {};
++        bus_config.i2c_port = (i2c_port_t)0;
++        bus_config.sda_io_num = PinOrNc(d.sda);
++        bus_config.scl_io_num = PinOrNc(d.scl);
++        bus_config.clk_source = I2C_CLK_SRC_DEFAULT;
++        bus_config.glitch_ignore_cnt = 7;
++        bus_config.flags.enable_internal_pullup = 1;
++        if (i2c_new_master_bus(&bus_config, &bus) != ESP_OK) {
++            ESP_LOGE(TAG, "OLED I2C bus failed (SDA %d, SCL %d)", d.sda, d.scl);
++            display_ = new NoDisplay();
++            return;
++        }
++        esp_lcd_panel_io_i2c_config_t io_config = {};
++        io_config.dev_addr = (uint32_t)d.i2c_addr;
++        io_config.control_phase_bytes = 1;
++        io_config.dc_bit_offset = 6;
++        io_config.lcd_cmd_bits = 8;
++        io_config.lcd_param_bits = 8;
++        io_config.scl_speed_hz = 400 * 1000;
++        ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c_v2(bus, &io_config, &panel_io_));
++        esp_lcd_panel_dev_config_t panel_config = {};
++        panel_config.reset_gpio_num = PinOrNc(d.rst);
++        panel_config.bits_per_pixel = 1;
++        esp_err_t err;
++        esp_lcd_panel_ssd1306_config_t ssd1306_config = {};
++        ssd1306_config.height = (uint8_t)d.height;
++        if (d.driver == "sh1106") {
++            err = esp_lcd_new_panel_sh1106(panel_io_, &panel_config, &panel_);
++        } else {
++            panel_config.vendor_config = &ssd1306_config;
++            err = esp_lcd_new_panel_ssd1306(panel_io_, &panel_config, &panel_);
++        }
++        if (err != ESP_OK || esp_lcd_panel_reset(panel_) != ESP_OK || esp_lcd_panel_init(panel_) != ESP_OK) {
++            ESP_LOGE(TAG, "OLED %s init failed", d.driver.c_str());
++            display_ = new NoDisplay();
++            return;
++        }
++        esp_lcd_panel_disp_on_off(panel_, true);
++        display_ = new OledDisplay(panel_io_, panel_, d.width, d.height, d.mirror_x, d.mirror_y);
++    }
++
++    // Skins live on the voice server next to the OTA endpoint: .../xiaozhi/ota/ -> .../skins/active.json
++    static std::string ActiveSkinUrl() {
++        Settings settings("wifi", false);
++        std::string url = settings.GetString("ota_url");
++        if (url.empty()) url = CONFIG_OTA_URL;
++        auto p = url.find("/xiaozhi/ota");
++        return (p == std::string::npos ? url : url.substr(0, p)) + "/skins/active.json";
++    }
+ 
+-        display_ = new ZHENGCHEN_LcdDisplay(panel_io_, panel_, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, 
+-            DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
+-        display_->SetupHighTempWarningPopup();
++    static void SkinBootTask(void* arg) {
++        auto* self = static_cast<ZHENGCHEN_1_54TFT_WIFI*>(arg);
++        auto& app = Application::GetInstance();
++        for (int i = 0; i < 120 && app.GetDeviceState() != kDeviceStateIdle; i++) vTaskDelay(pdMS_TO_TICKS(1000));
++        if (app.GetDeviceState() == kDeviceStateIdle) {
++            ESP_LOGI(TAG, "hardware profile: %s", cv::HwReload("").c_str());
++            if (self->eyes_) ESP_LOGI(TAG, "loading skin: %s", self->eyes_->LoadSkinFromUrl(ActiveSkinUrl()).c_str());
++        }
++        vTaskDelete(nullptr);
+     }
+ 
+     void InitializeTools() {
++        cv::InitIo(display_, eyes_);
++        xTaskCreate(SkinBootTask, "skin", 6144, this, 2, nullptr);
++        auto& mcp = McpServer::GetInstance();
++        mcp.AddTool("self.eyes.load_skin",
++            "Download a screen skin JSON from the voice server and apply it now. `url`: skin address "
++            "(normally http://<server>/skins/active.json).",
++            PropertyList({Property("url", kPropertyTypeString)}),
++            [this](const PropertyList& properties) -> ReturnValue {
++                if (!eyes_) return std::string("this screen has no animated eyes");
++                return eyes_->LoadSkinFromUrl(properties["url"].value<std::string>());
++            });
++        mcp.AddTool("self.eyes.set_style",
++            "Switch the screen look. `style`: `classic` (retro CRT camera-lens eyes), `circuit` (circuit-board "
++            "robot face), `pixel` (8-bit game eyes), `hud` (holographic AI core), `orb` (glowing assistant orb), "
++            "`pet` (soft cute robot eyes), `minimal` (two dots and a voice line) or `eye` (one realistic eye). "
++            "Combine with self.eyes.set_color. Persists across reboots.",
++            PropertyList({Property("style", kPropertyTypeString)}),
++            [this](const PropertyList& properties) -> ReturnValue {
++                if (!eyes_) return std::string("this screen has no animated eyes");
++                return eyes_->SetEyeStyle(properties["style"].value<std::string>());
++            });
++        mcp.AddTool("self.eyes.set_color",
++            "Set the color of the robot eyes / screen phosphor. `color`: `amber` (default) or `green`. Persists across reboots.",
++            PropertyList({Property("color", kPropertyTypeString)}),
++            [this](const PropertyList& properties) -> ReturnValue {
++                if (!eyes_) return std::string("this screen has no animated eyes");
++                return eyes_->SetEyeColor(properties["color"].value<std::string>());
++            });
++        mcp.AddTool("self.eyes.show_emotion",
++            "Make the robot eyes show an emotion for a few seconds. `emotion`: neutral, happy, sad, angry, "
++            "surprised, thinking or sleepy. `seconds`: how long to hold it (1-60).",
++            PropertyList({Property("emotion", kPropertyTypeString),
++                          Property("seconds", kPropertyTypeInteger, 5, 1, 60)}),
++            [this](const PropertyList& properties) -> ReturnValue {
++                if (!eyes_) return std::string("this screen has no animated eyes");
++                return eyes_->ShowEyeEmotion(properties["emotion"].value<std::string>(),
++                                                properties["seconds"].value<int>());
++            });
+     }
+ 
+ public:
+     ZHENGCHEN_1_54TFT_WIFI() :
+-        boot_button_(BOOT_BUTTON_GPIO),
+-        volume_up_button_(VOLUME_UP_BUTTON_GPIO),
+-        volume_down_button_(VOLUME_DOWN_BUTTON_GPIO) {
++        boot_button_(PinOrNc(cv::Hw().btn_boot)),
++        volume_up_button_(PinOrNc(cv::Hw().btn_vol_up)),
++        volume_down_button_(PinOrNc(cv::Hw().btn_vol_down)) {
+         InitializePowerManager();
+         InitializePowerSaveTimer();
+-        InitializeSpi();
+         InitializeButtons();
+-        InitializeSt7789Display();  
++        InitializeDisplay();  
+         InitializeTools();
+-        GetBacklight()->RestoreBrightness();
++        if (GetBacklight()) GetBacklight()->RestoreBrightness();
+     }
+ 
+     // 获取音频编解码器
+     virtual AudioCodec* GetAudioCodec() override {
+         // 静态实例化NoAudioCodecSimplex类
++        const auto& hw = cv::Hw();
+         static NoAudioCodecSimplex audio_codec(AUDIO_INPUT_SAMPLE_RATE, AUDIO_OUTPUT_SAMPLE_RATE,
+-            AUDIO_I2S_SPK_GPIO_BCLK, AUDIO_I2S_SPK_GPIO_LRCK, AUDIO_I2S_SPK_GPIO_DOUT, AUDIO_I2S_MIC_GPIO_SCK, AUDIO_I2S_MIC_GPIO_WS, AUDIO_I2S_MIC_GPIO_DIN);
++            PinOrNc(hw.spk_bclk), PinOrNc(hw.spk_lrck), PinOrNc(hw.spk_dout),
++            PinOrNc(hw.mic_sck), PinOrNc(hw.mic_ws), PinOrNc(hw.mic_din));
+         // 返回音频编解码器
+         return &audio_codec;
+     }
+ 
++    // Camera module wired to the board (type "board" in the hardware profile). The assistant gets the stock
++    // self.camera.take_photo tool; photos go to the voice server's /vision/explain.
++    virtual Camera* GetCamera() override {
++        static Camera* camera = nullptr;
++        static bool tried = false;
++        const auto& c = cv::Hw().camera;
++        if (tried || c.type != "board") return camera;
++        tried = true;
++        camera_config_t config = {};
++        config.pin_d0 = c.d[0]; config.pin_d1 = c.d[1]; config.pin_d2 = c.d[2]; config.pin_d3 = c.d[3];
++        config.pin_d4 = c.d[4]; config.pin_d5 = c.d[5]; config.pin_d6 = c.d[6]; config.pin_d7 = c.d[7];
++        config.pin_xclk = c.xclk;
++        config.pin_pclk = c.pclk;
++        config.pin_vsync = c.vsync;
++        config.pin_href = c.href;
++        config.pin_sccb_sda = c.sda;
++        config.pin_sccb_scl = c.scl;
++        config.sccb_i2c_port = 1;
++        config.pin_pwdn = c.pwdn;
++        config.pin_reset = c.reset;
++        config.xclk_freq_hz = 20000000;
++        config.pixel_format = PIXFORMAT_RGB565;
++        config.frame_size = FRAMESIZE_QVGA;
++        config.jpeg_quality = 12;
++        config.fb_count = 1;
++        config.fb_location = CAMERA_FB_IN_PSRAM;
++        config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
++        camera = new Esp32Camera(config);
++        ESP_LOGI(TAG, "camera module initialised from the hardware profile");
++        return camera;
++    }
++
+     virtual Display* GetDisplay() override {
+         return display_;
+     }
+     
+     virtual Backlight* GetBacklight() override {
+-        static PwmBacklight backlight(DISPLAY_BACKLIGHT_PIN, DISPLAY_BACKLIGHT_OUTPUT_INVERT);
++        const auto& d = cv::Hw().display;
++        if (d.bl < 0 || d.IsOled()) return nullptr;
++        static PwmBacklight backlight(PinOrNc(d.bl), d.bl_invert);
+         return &backlight;
+     }
+ 
+diff --git a/main/boards/zhengchen-1.54tft-wifi/zhengchen_lcd_display.h b/main/boards/zhengchen-1.54tft-wifi/zhengchen_lcd_display.h
+index fa6222a..f07155b 100644
+--- a/main/boards/zhengchen-1.54tft-wifi/zhengchen_lcd_display.h
++++ b/main/boards/zhengchen-1.54tft-wifi/zhengchen_lcd_display.h
+@@ -15,6 +15,7 @@ public:
+     using SpiLcdDisplay::SpiLcdDisplay;
+ 
+     void SetupHighTempWarningPopup() {
++        DisplayLockGuard lock(this);  // LVGL task is already running: never touch objects unlocked
+         auto lvgl_theme = static_cast<LvglTheme*>(current_theme_);
+         auto text_font = lvgl_theme->text_font()->font();
+         // 创建高温警告弹窗
+@@ -49,12 +50,14 @@ public:
+     }
+ 
+     void ShowHighTempWarning() {
++        DisplayLockGuard lock(this);
+         if (high_temp_popup_ && lv_obj_has_flag(high_temp_popup_, LV_OBJ_FLAG_HIDDEN)) {
+             lv_obj_remove_flag(high_temp_popup_, LV_OBJ_FLAG_HIDDEN);
+         }
+     }
+ 
+     void HideHighTempWarning() {
++        DisplayLockGuard lock(this);
+         if (high_temp_popup_ && !lv_obj_has_flag(high_temp_popup_, LV_OBJ_FLAG_HIDDEN)) {
+             lv_obj_add_flag(high_temp_popup_, LV_OBJ_FLAG_HIDDEN);
+         }
+diff --git a/main/cv_discovery.cc b/main/cv_discovery.cc
+new file mode 100644
+index 0000000..ba24d88
+--- /dev/null
++++ b/main/cv_discovery.cc
+@@ -0,0 +1,119 @@
++#include "cv_discovery.h"
++
++#include <cJSON.h>
++#include <esp_log.h>
++#include <esp_mac.h>
++#include <esp_timer.h>
++#include <lwip/sockets.h>
++
++#include <cstring>
++
++#include "settings.h"
++
++#define TAG "CvDiscovery"
++
++namespace cv_discovery {
++
++static std::string MacString() {
++    uint8_t mac[6] = {};
++    esp_read_mac(mac, ESP_MAC_WIFI_STA);
++    char s[18];
++    snprintf(s, sizeof(s), "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
++    return s;
++}
++
++static std::string CurrentUrl() {
++    Settings settings("wifi", false);
++    std::string url = settings.GetString("ota_url");
++    return url.empty() ? std::string(CONFIG_OTA_URL) : url;
++}
++
++std::string Discover(int timeout_ms) {
++    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
++    if (sock < 0) {
++        ESP_LOGE(TAG, "socket() failed");
++        return "";
++    }
++    int yes = 1;
++    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes));
++    timeval tv = {0, 200 * 1000};
++    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
++
++    std::string paired;
++    {
++        Settings settings("wifi", false);
++        paired = settings.GetString("cv_srv_id");
++    }
++    char msg[160];
++    snprintf(msg, sizeof(msg), "{\"cv\":\"discover\",\"device\":\"%s\",\"paired\":\"%s\"}",
++             MacString().c_str(), paired.c_str());
++
++    sockaddr_in to = {};
++    to.sin_family = AF_INET;
++    to.sin_port = htons(kPort);
++    to.sin_addr.s_addr = htonl(INADDR_BROADCAST);
++
++    std::string best_url, best_id, any_url, any_id;
++    int64_t end = esp_timer_get_time() + (int64_t)timeout_ms * 1000;
++    int64_t next_send = 0;
++    while (esp_timer_get_time() < end && best_url.empty()) {
++        if (esp_timer_get_time() >= next_send) {   // re-broadcast: UDP may be lost
++            sendto(sock, msg, strlen(msg), 0, (sockaddr*)&to, sizeof(to));
++            next_send = esp_timer_get_time() + 700 * 1000;
++        }
++        char buf[512];
++        sockaddr_in from = {};
++        socklen_t flen = sizeof(from);
++        int n = recvfrom(sock, buf, sizeof(buf) - 1, 0, (sockaddr*)&from, &flen);
++        if (n <= 0) continue;
++        buf[n] = 0;
++        cJSON* root = cJSON_Parse(buf);
++        if (!root) continue;
++        auto* cv = cJSON_GetObjectItem(root, "cv");
++        auto* id = cJSON_GetObjectItem(root, "id");
++        auto* ota = cJSON_GetObjectItem(root, "ota");
++        if (cJSON_IsString(cv) && strcmp(cv->valuestring, "server") == 0 && cJSON_IsString(id) &&
++            cJSON_IsString(ota) && strncmp(ota->valuestring, "http", 4) == 0) {
++            ESP_LOGI(TAG, "server %s answered: %s", id->valuestring, ota->valuestring);
++            if (!paired.empty() && paired == id->valuestring) {
++                best_url = ota->valuestring;
++                best_id = id->valuestring;
++            } else if (any_url.empty()) {
++                any_url = ota->valuestring;
++                any_id = id->valuestring;
++            }
++        }
++        cJSON_Delete(root);
++    }
++    close(sock);
++
++    // An unpaired device pairs with the first server; a paired one switches only if its server is gone
++    // and another one answered (e.g. the server was reinstalled and got a new id).
++    if (best_url.empty() && !any_url.empty()) {
++        best_url = any_url;
++        best_id = any_id;
++        ESP_LOGW(TAG, "%s server %s", paired.empty() ? "pairing with" : "paired server silent, switching to",
++                 best_id.c_str());
++    }
++    if (best_url.empty()) {
++        ESP_LOGW(TAG, "no ClaudeVoice server answered on UDP %d", kPort);
++        return "";
++    }
++    Settings settings("wifi", true);
++    settings.SetString("ota_url", best_url);
++    settings.SetString("cv_srv_id", best_id);
++    return best_url;
++}
++
++bool RediscoverChanged(int timeout_ms) {
++    std::string before = CurrentUrl();
++    std::string found = Discover(timeout_ms);
++    return !found.empty() && found != before;
++}
++
++void Unpair() {
++    Settings settings("wifi", true);
++    settings.SetString("cv_srv_id", "");
++}
++
++}  // namespace cv_discovery
+diff --git a/main/cv_discovery.h b/main/cv_discovery.h
+new file mode 100644
+index 0000000..ae828ff
+--- /dev/null
++++ b/main/cv_discovery.h
+@@ -0,0 +1,24 @@
++// Finds the ClaudeVoice server on the local network, so the device keeps working when the PC
++// (or the device) gets a different IP address.
++//
++// The device broadcasts {"cv":"discover",...} to UDP port 8766; every ClaudeVoice server on the
++// LAN answers with its id and its OTA URL. The device remembers the server it paired with
++// (NVS "wifi"/"cv_srv_id") and prefers it; an unpaired device takes the first server that answers.
++#pragma once
++#include <string>
++
++namespace cv_discovery {
++
++constexpr int kPort = 8766;
++
++// Broadcast and wait up to timeout_ms for answers. On success stores the OTA URL in NVS
++// ("wifi"/"ota_url", read by Ota::GetCheckVersionUrl) and returns it; returns "" if nobody answered.
++std::string Discover(int timeout_ms = 2500);
++
++// True when Discover() found a server whose URL differs from the one in use (caller should retry/reconnect).
++bool RediscoverChanged(int timeout_ms = 2500);
++
++// Forget the paired server (next discovery pairs with whoever answers first).
++void Unpair();
++
++}  // namespace cv_discovery
+diff --git a/main/display/cv_audio_level.h b/main/display/cv_audio_level.h
+new file mode 100644
+index 0000000..8d07c81
+--- /dev/null
++++ b/main/display/cv_audio_level.h
+@@ -0,0 +1,28 @@
++// Voice level taps for the eye animation (written by AudioService, read by the display).
++#pragma once
++
++#include <atomic>
++#include <cmath>
++#include <cstddef>
++#include <cstdint>
++
++namespace cv {
++
++inline std::atomic<float> g_mic_level{0.0f};
++inline std::atomic<float> g_spk_level{0.0f};
++inline std::atomic<int64_t> g_mic_time_us{0};   // esp_timer_get_time() of last update
++inline std::atomic<int64_t> g_spk_time_us{0};
++
++// RMS of int16 PCM mapped to 0..1 over roughly -50..-12 dBFS.
++inline float PcmLevel(const int16_t* data, size_t n) {
++    if (n == 0) return 0.0f;
++    uint64_t acc = 0;
++    for (size_t i = 0; i < n; i += 2) acc += (int32_t)data[i] * data[i];
++    float rms = sqrtf((float)acc / (float)((n + 1) / 2)) / 32768.0f;
++    if (rms < 1e-6f) return 0.0f;
++    float db = 20.0f * log10f(rms);
++    float v = (db + 50.0f) / 38.0f;
++    return v < 0 ? 0 : (v > 1 ? 1 : v);
++}
++
++}  // namespace cv
+diff --git a/main/protocols/websocket_protocol.cc b/main/protocols/websocket_protocol.cc
+index f0cc034..01e4d8d 100644
+--- a/main/protocols/websocket_protocol.cc
++++ b/main/protocols/websocket_protocol.cc
+@@ -1,4 +1,6 @@
+ #include "websocket_protocol.h"
++#include "cv_discovery.h"
++#include <esp_system.h>
+ #include "board.h"
+ #include "system_info.h"
+ #include "application.h"
+@@ -175,6 +177,12 @@ bool WebsocketProtocol::OpenAudioChannel() {
+     ESP_LOGI(TAG, "Connecting to websocket server: %s with version: %d", url.c_str(), version_);
+     if (!websocket_->Connect(url.c_str())) {
+         ESP_LOGE(TAG, "Failed to connect to websocket server, code=%d", websocket_->GetLastError());
++        if (cv_discovery::RediscoverChanged()) {
++            // The PC got a new address while we were running: restart to fetch the new config.
++            ESP_LOGW(TAG, "server moved, restarting to reconnect");
++            vTaskDelay(pdMS_TO_TICKS(300));
++            esp_restart();
++        }
+         SetError(Lang::Strings::SERVER_NOT_CONNECTED);
+         return false;
+     }

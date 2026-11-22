@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eyes Prototype</title>
+<style>
+  :root { --bg:#0d0c0a; --panel:#171512; --fg:#e8dcc4; --dim:#8a8170; --acc:#ffb04a; --line:#2a2620; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.4 "Consolas", ui-monospace, monospace;
+         display:flex; flex-wrap:wrap; gap:28px; padding:24px 16px; justify-content:center; }
+  .device { background:#1b1916; border:1px solid #333; border-radius:28px; padding:22px;
+            box-shadow: 0 20px 60px #000a, inset 0 1px 0 #ffffff10; }
+  canvas { display:block; width:480px; height:480px; image-rendering:pixelated; border-radius:6px; background:#000; }
+  @media (max-width:560px) { canvas { width:calc(100vw - 76px); height:calc(100vw - 76px); } }
+  .panel { width:320px; max-width:100%; }
+  h1 { font-size:15px; letter-spacing:.12em; color:var(--acc); margin:0 0 4px; }
+  p.note { color:var(--dim); margin:0 0 18px; font-size:12px; }
+  .grp { margin-bottom:16px; }
+  .grp b { display:block; color:var(--dim); font-weight:normal; font-size:11px; letter-spacing:.14em; margin-bottom:6px; }
+  button { background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 10px;
+           margin:0 4px 6px 0; font:inherit; font-size:12px; cursor:pointer; }
+  button:hover { border-color:var(--acc); }
+  button.on { border-color:var(--acc); color:var(--acc); }
+  button.play { background:#2a1f10; border-color:var(--acc); color:var(--acc); width:100%; padding:10px; font-size:13px; }
+  input[type=range] { width:100%; accent-color: var(--acc); }
+</style>
+</head>
+<body>
+<div class="device"><canvas id="scr" width="240" height="240"></canvas></div>
+<div class="panel">
+  <h1>EYES / CRT PROTOTYPE</h1>
+  <p class="note">Предпросмотр экрана 240×240. Тот же алгоритм пойдёт в прошивку.</p>
+  <div class="grp"><button class="play" id="demo">▶ Сценарий диалога</button></div>
+  <div class="grp"><b>СОСТОЯНИЕ</b><div id="states"></div></div>
+  <div class="grp"><b>ЭМОЦИЯ</b><div id="emos"></div></div>
+  <div class="grp"><b>ТЕМА</b><div id="styles"></div></div>
+  <div class="grp"><b>ЛЮМИНОФОР</b><div id="pals"></div></div>
+  <div class="grp"><b>ПОСЛЕСВЕЧЕНИЕ</b><input type="range" id="decay" min="0" max="0.85" step="0.01" value="0.55"></div>
+</div>
+<script src="cv_font.js"></script>
+<script src="eyes_engine.js"></script>
+<script>
+const eng = new EyesEngine();
+const cv = document.getElementById("scr"), ctx = cv.getContext("2d");
+const img = ctx.createImageData(SW, SH);
+
+function buttons(id, items, cur, fn) {
+  const box = document.getElementById(id);
+  items.forEach(it => {
+    const b = document.createElement("button"); b.textContent = it; b.dataset.v = it;
+    if (it === cur) b.classList.add("on");
+    b.onclick = () => { stopDemo(); fn(it); [...box.children].forEach(c => c.classList.toggle("on", c === b)); };
+    box.appendChild(b);
+  });
+  return box;
+}
+const sBox = buttons("states", STATES, "idle", s => eng.setState(s));
+const eBox = buttons("emos", EMOTIONS, "neutral", e => eng.setEmotion(e));
+buttons("pals", ["amber", "green"], "amber", p => eng.paletteName = p);
+buttons("styles", ["classic", "circuit"], "classic", s => eng.style = s);
+document.getElementById("decay").oninput = e => eng.decay = +e.target.value;
+function mark(box, v) { [...box.children].forEach(c => c.classList.toggle("on", c.dataset.v === v)); }
+
+// fake audio envelope for speaking/listening
+let talkUntil = 0;
+function fakeLevel(t) {
+  if (eng.state === "speaking") {
+    const syl = Math.max(0, Math.sin(t * 11) * 0.5 + Math.sin(t * 4.3) * 0.5);
+    return 0.25 + 0.75 * syl * (0.7 + 0.3 * Math.random());
+  }
+  if (eng.state === "listening" && t < talkUntil) return 0.3 + 0.5 * Math.abs(Math.sin(t * 9)) * Math.random();
+  return 0;
+}
+
+// scripted dialogue
+let demoTimers = [];
+function stopDemo() { demoTimers.forEach(clearTimeout); demoTimers = []; }
+function at(ms, fn) { demoTimers.push(setTimeout(fn, ms)); }
+document.getElementById("demo").onclick = () => {
+  stopDemo();
+  const S = s => { eng.setState(s); mark(sBox, s); };
+  const E = e => { eng.setEmotion(e); mark(eBox, e); };
+  S("idle"); E("neutral"); eng.setMessage("system", "");
+  at(1500, () => { S("listening"); eng.setMessage("assistant", "Слушаю."); });
+  at(2600, () => { talkUntil = performance.now() / 1000 + 2.4; });
+  at(3000, () => eng.setMessage("user", "Проверь, сколько места осталось на диске D"));
+  at(5200, () => { S("thinking"); E("thinking"); });
+  at(8200, () => { S("speaking"); E("neutral"); eng.setMessage("assistant", "На диске D свободно сто двенадцать гигабайт из пятисот. Это примерно двадцать два процента."); });
+  at(13800, () => { E("happy"); eng.setMessage("assistant", "Если нужно, могу найти самые большие папки."); });
+  at(17000, () => { S("listening"); E("neutral"); });
+  at(23000, () => { S("idle"); eng.setMessage("system", ""); });
+  at(30000, () => S("sleep"));
+};
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  eng.setLevel(fakeLevel(now / 1000));
+  eng.update(dt);
+  eng.render(img.data);
+  ctx.putImageData(img, 0, 0);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

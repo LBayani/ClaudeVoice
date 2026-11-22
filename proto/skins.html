@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Skins Lab</title>
+<style>
+body{margin:0;background:#0d0c0a;color:#e8dcc4;font:13px Consolas,monospace;padding:12px}
+.g{display:grid;grid-template-columns:repeat(4,250px);gap:12px}
+.c{background:#171512;border:1px solid #2a2620;border-radius:10px;padding:5px;text-align:center}
+canvas{width:240px;height:240px;display:block;border-radius:6px;background:#000}
+.bar{margin:10px 0} button{background:#1e1b17;color:#e8dcc4;border:1px solid #2c2822;border-radius:6px;padding:5px 9px;margin:2px;cursor:pointer}
+</style></head><body>
+<div class="bar" id="st"></div><div class="bar" id="em"></div>
+<div class="g" id="g"></div>
+<script src="cv_font.js"></script><script src="eyes_engine.js"></script><script src="skins_render.js"></script>
+<script>
+const SK = [
+  ["classic", [[0,"#000000"],[0.3,"#4a2000"],[0.72,"#ffa03a"],[1,"#fff2cf"]]],
+  ["circuit", [[0,"#000000"],[0.35,"#06380c"],[0.75,"#46f064"],[1,"#eaffea"]]],
+  ["pixel",   [[0,"#000000"],[0.4,"#1f4000"],[0.8,"#9dff3a"],[1,"#f4ffe0"]]],
+  ["hud",     [[0,"#000000"],[0.35,"#00263f"],[0.75,"#3cc8ff"],[1,"#e8fbff"]]],
+  ["orb",     [[0,"#000000"],[0.3,"#0b1640"],[0.65,"#2e7bff"],[0.85,"#7fe3ff"],[1,"#ffffff"]]],
+  ["pet",     [[0,"#000000"],[0.35,"#003d33"],[0.8,"#2dffd2"],[1,"#eafffa"]]],
+  ["minimal", [[0,"#000000"],[0.5,"#444444"],[0.85,"#dddddd"],[1,"#ffffff"]]],
+  ["eye",     [[0,"#000000"],[0.35,"#1a2633"],[0.75,"#9fd2ff"],[1,"#ffffff"]]],
+];
+const engs = SK.map(([base, pal]) => {
+  const c = document.createElement("div"); c.className = "c"; c.innerHTML = `<canvas width=240 height=240></canvas><div>${base}</div>`;
+  document.getElementById("g").appendChild(c);
+  const e = new EyesEngine(); e.applySkin({base, palette: pal}); e.setMessage("assistant", "Привет! Я на связи.");
+  return [e, c.querySelector("canvas").getContext("2d")];
+});
+for (const s of STATES) { const b = document.createElement("button"); b.textContent = s; b.onclick = () => engs.forEach(([e]) => e.setState(s)); st.appendChild(b); }
+for (const m of EMOTIONS) { const b = document.createElement("button"); b.textContent = m; b.onclick = () => engs.forEach(([e]) => e.setEmotion(m)); em.appendChild(b); }
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  for (const [e, ctx] of engs) {
+    const sp = e.state === "speaking" || e.state === "listening";
+    e.setLevel(sp ? 0.3 + 0.7 * Math.max(0, Math.sin(now / 90) * 0.5 + Math.sin(now / 230) * 0.5) : 0);
+    e.update(dt); const img = ctx.createImageData(SW, SH); e.render(img.data); ctx.putImageData(img, 0, 0);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script></body></html>
