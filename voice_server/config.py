@@ -142,7 +142,7 @@ class OllamaCfg:
 class PcToolsCfg:
     """Actions on this PC for LOCAL brains (Claude has its own tools)."""
     enabled: bool = True            # open apps, sites, folders; date/time/disks
-    allow_powershell: bool = False  # run arbitrary PowerShell (dangerous commands are always blocked)
+    allow_powershell: bool = False  # PowerShell by voice; the block list is incomplete, keep off unless needed
 
 
 LOCAL_PC_PROMPT = (
@@ -216,17 +216,92 @@ class Config:
 SETTINGS_FILE = ROOT / "settings.json"
 
 
-def _merge(dc, data: dict):
+# Allowed ranges of numeric settings, by key name (checked for changes made from the app).
+RANGES = {"port": (1, 65535), "managed_port": (1, 65535), "volume": (0, 1), "temperature": (0, 2),
+          "threshold": (0, 1), "bitrate": (6000, 510000), "sample_rate": (8000, 48000), "beam_size": (1, 10),
+          "max_tokens": (16, 32768), "max_history": (0, 200), "max_turns": (1, 200), "max_seconds": (5, 3600),
+          "new_conversation_after_min": (0, 10080), "idle_timeout_s": (1, 3600), "min_silence_ms": (100, 10000),
+          "min_speech_ms": (0, 10000), "pre_roll_ms": (0, 5000), "max_utterance_ms": (1000, 120000)}
+
+
+def _checked(dc, k: str, cur, v):
+    """v converted to the type of the current value; ValueError/TypeError if it doesn't fit."""
+    if dc.__dataclass_fields__[k].type in ("object", object) or cur is None:
+        return v
+    if isinstance(cur, bool):
+        if not isinstance(v, bool):
+            raise TypeError(f"{k}: нужно да/нет")
+        return v
+    if isinstance(cur, (int, float)):
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise TypeError(f"{k}: нужно число")
+        if isinstance(cur, int):
+            if v != int(v):
+                raise ValueError(f"{k}: нужно целое число")
+            v = int(v)
+        else:
+            v = float(v)
+        lo, hi = RANGES.get(k, (None, None))
+        if lo is not None and not lo <= v <= hi:
+            raise ValueError(f"{k}: допустимо от {lo} до {hi}")
+        return v
+    if isinstance(cur, (str, Path)) and not isinstance(v, str):
+        raise TypeError(f"{k}: нужна строка")
+    if isinstance(cur, list) and not isinstance(v, list):
+        raise TypeError(f"{k}: нужен список")
+    return v
+
+
+def _merge(dc, data: dict, strict: bool = False):
+    if not isinstance(data or {}, dict):
+        raise TypeError("ожидался набор настроек")
     for k, v in (data or {}).items():
         if not hasattr(dc, k):
             raise KeyError(f"Unknown config key: {k}")
         cur = getattr(dc, k)
-        if hasattr(cur, "__dataclass_fields__") and isinstance(v, dict):
-            _merge(cur, v)
-        elif isinstance(cur, Path):
-            setattr(dc, k, Path(v))
-        else:
-            setattr(dc, k, v)
+        if hasattr(cur, "__dataclass_fields__"):
+            if v is None:          # an empty section in config.yaml
+                continue
+            if not isinstance(v, dict):
+                raise TypeError(f"{k}: ожидался набор настроек")
+            _merge(cur, v, strict)
+            continue
+        if strict:
+            v = _checked(dc, k, cur, v)
+        setattr(dc, k, Path(v) if isinstance(cur, Path) else v)
+
+
+# Fields the app's HTTP API may not change: what runs as code on this PC (downloaded pickles,
+# executables, raw CLI flags, permission mode) and where files go. Edit them in config.yaml.
+LOCKED = {("tts", "model_url"), ("claude", "executable"), ("claude", "extra_args"), ("claude", "disallowed_tools"),
+          ("claude", "permission_mode"), ("claude", "system_prompt"), ("ollama", "executable"), ("ollama", "system_prompt"),
+          ("openai", "system_prompt"), ("models_dir",), ("logs_dir",), ("server", "token"), ("server", "host")}
+
+
+def locked_keys(changes: dict, prefix: tuple = ()) -> list[str]:
+    out = []
+    for k, v in (changes or {}).items():
+        key = prefix + (k,)
+        if key in LOCKED:
+            out.append(".".join(key))
+        elif isinstance(v, dict):
+            out += locked_keys(v, key)
+    return out
+
+
+def atomic_write_text(path: Path, text: str):
+    """Write via a temp file + rename: a crash or power loss never leaves a half-written file."""
+    path = Path(path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
 
 
 def load_config() -> Config:
@@ -241,7 +316,7 @@ def load_config() -> Config:
         cfg.server.token = secrets.token_hex(24)
         saved = load_settings()
         saved.setdefault("server", {})["token"] = cfg.server.token
-        SETTINGS_FILE.write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_text(SETTINGS_FILE, json.dumps(saved, ensure_ascii=False, indent=2))
     cfg.models_dir.mkdir(parents=True, exist_ok=True)
     cfg.logs_dir.mkdir(parents=True, exist_ok=True)
     return cfg
@@ -264,11 +339,12 @@ def _deep_update(dst: dict, src: dict):
 
 def apply_settings(cfg: Config, changes: dict):
     """Validate + apply changes in place (live objects keep working) and persist them."""
-    _merge(copy.deepcopy(cfg), changes)   # dry run: raises KeyError on unknown keys, nothing touched
-    _merge(cfg, changes)
+    probe = copy.deepcopy(cfg)
+    _merge(probe, changes, strict=True)   # dry run: unknown keys, wrong types, out of range -> error, nothing touched
+    _merge(cfg, changes, strict=True)
     saved = load_settings()
     _deep_update(saved, changes)
-    SETTINGS_FILE.write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_text(SETTINGS_FILE, json.dumps(saved, ensure_ascii=False, indent=2))
 
 
 def as_dict(obj):

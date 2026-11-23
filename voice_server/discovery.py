@@ -64,7 +64,8 @@ class _Responder(asyncio.DatagramProtocol):
         reply = {"cv": "server", "id": self.sid, "name": socket.gethostname(),
                  "ota": f"http://{ip}:{port}/xiaozhi/ota/"}
         self.transport.sendto(json.dumps(reply).encode(), addr)
-        self.state.update(time=time.time(), device=str(msg.get("device", ""))[:40], ip=addr[0],
+        from .app import clean_field
+        self.state.update(time=time.time(), device=clean_field(msg.get("device"), 40), ip=addr[0],
                           paired=msg.get("paired") == self.sid, answered_with=ip)
         log.info("discovery: device %s at %s -> %s (paired=%s)", msg.get("device"), addr[0], ip,
                  msg.get("paired") == self.sid)

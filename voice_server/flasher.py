@@ -119,9 +119,14 @@ def probe(port: str) -> dict:
         esptool("--port", port, "--before", "no-reset", "--after", "hard-reset", "chip-id", timeout=30)   # back to its firmware
     fw = info["firmware"]
     info["is_xiaozhi"] = fw.get("project") == "xiaozhi"
-    info["is_claudevoice"] = info["is_xiaozhi"] and fw.get("version", "0") >= "2.4"
+    info["is_claudevoice"] = info["is_xiaozhi"] and _ver(fw.get("version", "0")) >= (2, 4)
     info["variant"] = pick_variant(info)
     return info
+
+
+def _ver(v: str) -> tuple[int, ...]:
+    """'2.10.1-dirty' -> (2, 10, 1): compare versions as numbers, not strings ("2.10" > "2.4")."""
+    return tuple(int(x) for x in re.findall(r"\d+", v or "")[:3]) or (0,)
 
 
 # ---------------- board catalogue ----------------
@@ -225,6 +230,10 @@ def start_backup(port: str, mac: str, flash: str) -> dict:
 
 
 def start_build(board: str) -> dict:
+    # board goes into a shell command inside the container: only names the source really has
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", board or "") or \
+            board not in {b["name"] for b in boards()} | {b.get("dir", "") for b in boards()}:
+        raise ValueError(f"неизвестная плата: {board!r}")
     if not shutil.which("docker"):
         raise RuntimeError("для сборки нужен Docker Desktop")
     if not SRC.exists():
@@ -292,6 +301,8 @@ VARIANTS = {
                           "label": "ESP32-C3 · 4 МБ флеш и больше"},
 }
 RELEASE_URL = "https://github.com/LBayani/ClaudeVoice/releases/latest/download/{name}.bin"
+SUMS_URL = "https://github.com/LBayani/ClaudeVoice/releases/latest/download/SHA256SUMS.txt"
+CHIP_IDS = {"esp32s3": 9, "esp32c3": 5}   # esp_image_header_t.chip_id
 NVS_OFFSET, NVS_SIZE = 0x9000, 0x4000
 
 
@@ -337,22 +348,63 @@ def ensure_image(variant: str, job: "Job | None" = None) -> Path:
     collect_release_images()
     if p.exists():
         return p
+    import hashlib
     import urllib.request
+    if variant not in VARIANTS:
+        raise ValueError(f"неизвестный вариант прошивки: {variant}")
     url = RELEASE_URL.format(name=variant)
     if job:
         job.line(f"Скачиваю прошивку {variant} с GitHub…")
+    with urllib.request.urlopen(SUMS_URL, timeout=30) as r:
+        sums = r.read(65536).decode("utf-8", "replace")
+    want = next((ln.split()[0].lower() for ln in sums.splitlines()
+                 if len(ln.split()) == 2 and ln.split()[1].lstrip("*") == f"{variant}.bin"), "")
+    if not re.fullmatch(r"[0-9a-f]{64}", want):
+        raise RuntimeError(f"в релизе нет контрольной суммы для {variant}.bin — прошивка не скачана")
     IMAGES.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".part")
-    with urllib.request.urlopen(url, timeout=60) as r, open(tmp, "wb") as f:
-        total = int(r.headers.get("Content-Length") or 0)
-        done = 0
-        while chunk := r.read(65536):
-            f.write(chunk)
-            done += len(chunk)
-            if job and total:
-                job.progress = done * 100 / total
-    tmp.replace(p)
+    h = hashlib.sha256()
+    try:
+        with urllib.request.urlopen(url, timeout=60) as r, open(tmp, "wb") as f:
+            total = int(r.headers.get("Content-Length") or 0)
+            done = 0
+            while chunk := r.read(65536):
+                f.write(chunk)
+                h.update(chunk)
+                done += len(chunk)
+                if job and total:
+                    job.progress = done * 100 / total
+        if h.hexdigest() != want:
+            raise RuntimeError("скачанная прошивка повреждена или подменена (SHA256 не совпал)")
+        check_image(tmp, VARIANTS[variant]["target"], merged=True)
+        tmp.replace(p)
+    finally:
+        tmp.unlink(missing_ok=True)
+    if job:
+        job.line(f"SHA256 совпал: {want[:16]}…")
     return p
+
+
+def check_image(path: Path, target: str = "", merged: bool = False):
+    """ESP-IDF image sanity: header magic, chip, app descriptor of a xiaozhi build. ValueError if not."""
+    data = Path(path).read_bytes()
+    if merged:          # bootloader first; the app follows at the ota_0 / factory offset
+        if len(data) < 0x20000 or data[0] != 0xE9:
+            raise ValueError("это не полный образ прошивки ESP32")
+        chip = int.from_bytes(data[12:14], "little")
+    else:
+        if len(data) < 0x100 or len(data) > 0x800000 or data[0] != 0xE9:
+            raise ValueError("это не файл прошивки ESP32")
+        chip = int.from_bytes(data[12:14], "little")
+        if int.from_bytes(data[0x20:0x24], "little") != 0xABCD5432:
+            raise ValueError("в файле нет описания приложения ESP-IDF")
+        project = data[0x50:0x70].split(b"\0", 1)[0].decode("ascii", "replace")
+        if project != "xiaozhi":
+            raise ValueError(f"это прошивка «{project}», а не xiaozhi/ClaudeVoice")
+    if chip not in CHIP_IDS.values():
+        raise ValueError(f"прошивка для неподдерживаемого чипа (id {chip})")
+    if target and CHIP_IDS.get(target) != chip:
+        raise ValueError(f"прошивка собрана для другого чипа (нужен {target})")
 
 
 def build_settings_partition(profile: dict, ssid: str, password: str, ota_url: str, server_id: str) -> Path:

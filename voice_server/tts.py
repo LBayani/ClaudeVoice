@@ -29,11 +29,12 @@ class Tts:
         self.synth("Проверка.")  # warm-up
         log.info("Silero TTS ready (speaker=%s, %d Hz)", cfg.speaker, cfg.sample_rate)
 
-    def synth(self, text: str) -> np.ndarray:
-        """Returns int16 mono PCM at cfg.sample_rate; empty array if the model can't read it."""
+    def synth(self, text: str, speaker: str | None = None) -> np.ndarray:
+        """Returns int16 mono PCM at cfg.sample_rate; empty array if the model can't read it.
+        speaker: another voice for this one phrase (the app's preview); the config stays as is."""
         with self._lock:
             try:
-                audio = self.model.apply_tts(text=text, speaker=self.cfg.speaker,
+                audio = self.model.apply_tts(text=text, speaker=speaker or self.cfg.speaker,
                                              sample_rate=self.sample_rate,
                                              put_accent=True, put_yo=True)
             except Exception as e:  # Silero raises on unreadable input

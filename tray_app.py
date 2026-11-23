@@ -31,11 +31,20 @@ STARTUP_LNK = Path(os.environ.get("APPDATA", "")) / r"Microsoft\Windows\Start Me
 
 
 def read_port() -> int:
-    try:   # honour server.port from config.yaml without importing the server package
+    """server.port as the server sees it: settings.json (set in the app) over config.yaml, else 8765."""
+    try:
+        port = json.loads((ROOT / "settings.json").read_text(encoding="utf-8")).get("server", {}).get("port")
+        if isinstance(port, int) and 0 < port < 65536:
+            return port
+    except (OSError, ValueError, AttributeError):
+        pass
+    try:   # config.yaml without importing yaml / the server package: the port: line of the server: section
+        section = ""
         for line in (ROOT / "config.yaml").read_text(encoding="utf-8").splitlines():
-            s = line.strip()
-            if s.startswith("port:"):
-                return int(s.split(":", 1)[1].split("#")[0])
+            if line[:1].isalpha():
+                section = line.split(":", 1)[0].strip()
+            elif section == "server" and line.strip().startswith("port:"):
+                return int(line.split(":", 1)[1].split("#")[0])
     except (OSError, ValueError):
         pass
     return 8765
@@ -59,11 +68,15 @@ def get_state() -> dict | None:
 
 
 def server_processes() -> list[int]:
-    """PIDs of running voice servers (also ones not started by us)."""
+    """PIDs of voice servers of THIS project folder (also ones not started by us, e.g. `uv run`).
+    Other ClaudeVoice copies on the PC are left alone: their command line has a different folder."""
+    root = str(ROOT).replace("'", "''")
     try:
         out = subprocess.run(["powershell", "-NoProfile", "-Command",
                               "Get-CimInstance Win32_Process -Filter \"Name='pythonw.exe' or Name='python.exe'\" | "
-                              "Where-Object { $_.CommandLine -match 'voice_server' } | ForEach-Object { $_.ProcessId }"],
+                              "Where-Object { $_.CommandLine -match 'voice_server' -and "
+                              f"$_.CommandLine.IndexOf('{root}', [StringComparison]::OrdinalIgnoreCase) -ge 0 }} | "
+                              "ForEach-Object { $_.ProcessId }"],
                              capture_output=True, text=True, timeout=15, creationflags=NO_WINDOW).stdout
         return [int(x) for x in out.split() if x.strip().isdigit()]
     except Exception:
@@ -134,6 +147,7 @@ class Tray:
         env = dict(os.environ, PYTHONUNBUFFERED="1", HF_HUB_DISABLE_SYMLINKS_WARNING="1")
         self.proc = subprocess.Popen([str(PYTHONW), "-m", "voice_server"], cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
                                      stdout=out, stderr=out, creationflags=NO_WINDOW)
+        out.close()   # the child has its own copy of the handle
         self.status = "starting"
         self.start_time = time.time()
         self.announced = False

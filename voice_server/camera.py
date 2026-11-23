@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hmac
 import logging
 import subprocess
 import time
@@ -41,6 +42,8 @@ def snap_esp32cam(url: str) -> bytes:
         raise RuntimeError("не задан адрес ESP32-CAM (Настройки → Камера)")
     if not url.rstrip("/").endswith(("capture", "jpg", "jpeg")):
         url = url.rstrip("/") + "/capture"      # stock CameraWebServer sketch
+    if not url.lower().startswith(("http://", "https://")):      # no file://, ftp:// ...
+        raise RuntimeError("адрес ESP32-CAM должен начинаться с http://")
     with urllib.request.urlopen(url, timeout=10) as r:
         return r.read()
 
@@ -65,6 +68,8 @@ def snap_pc(device: str) -> bytes:
             raise RuntimeError("веб-камера не найдена")
         device = cams[int(device or 0) % len(cams)]
     if "://" in device:
+        if not device.lower().startswith(("rtsp://", "rtsps://", "http://", "https://")):
+            raise RuntimeError("адрес камеры: только rtsp://, rtsps://, http:// или https://")
         container = av.open(device, options={"rtsp_transport": "tcp", "stimeout": "8000000"}, timeout=10)
     else:
         container = av.open(f"video={device}", format="dshow", options={"rtbufsize": "64M"})
@@ -158,7 +163,8 @@ async def vision_explain(request: web.Request) -> web.Response:
     """The firmware's self.camera.take_photo posts multipart {question, file} here."""
     svc = request.app["svc"]
     token = svc.cfg.server.token
-    if token and request.headers.get("Authorization", "").removeprefix("Bearer ").strip() != token:
+    got = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    if token and not hmac.compare_digest(got.encode(), token.encode()):
         raise web.HTTPUnauthorized()
     question, jpeg = "", b""
     reader = await request.multipart()

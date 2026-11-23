@@ -16,9 +16,8 @@ import io
 import json
 import re
 import time
-from pathlib import Path
 
-from .config import ROOT
+from .config import ROOT, atomic_write_text
 
 SKINS_DIR = ROOT / "skins"
 LW = LH = 120
@@ -76,6 +75,15 @@ def _slug(name: str) -> str:
     return s or f"skin-{int(time.time())}"
 
 
+_SAFE_ID = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+
+
+def safe_id(value: str) -> str:
+    """A user-supplied id as a plain file name: never a path ("../../settings" -> "settings")."""
+    v = str(value or "")
+    return v if _SAFE_ID.fullmatch(v) else _slug(v)[:64].strip("-") or _slug("")
+
+
 def list_skins() -> list[dict]:
     skins = builtin_skins()
     SKINS_DIR.mkdir(exist_ok=True)
@@ -118,7 +126,7 @@ def validate(skin: dict) -> dict:
     clean.sort(key=lambda s: s[0])
     if len(clean) < 2:
         raise ValueError("в палитре нужно минимум 2 цвета")
-    out = {"id": skin.get("id") or _slug(skin.get("name", "skin")), "name": (skin.get("name") or "Мой скин")[:40],
+    out = {"id": safe_id(skin.get("id") or _slug(skin.get("name", "skin"))), "name": (skin.get("name") or "Мой скин")[:40],
            "base": base, "palette": clean}
     if skin.get("eyes"):
         e = skin["eyes"]
@@ -146,12 +154,15 @@ def save_skin(skin: dict) -> dict:
     skin = validate(skin)
     SKINS_DIR.mkdir(exist_ok=True)
     skin["updated"] = int(time.time())
-    (SKINS_DIR / f"{skin['id']}.json").write_text(json.dumps(skin, ensure_ascii=False), encoding="utf-8")
+    p = SKINS_DIR / f"{safe_id(skin['id'])}.json"
+    if p.resolve().parent != SKINS_DIR.resolve():
+        raise ValueError("недопустимый id скина")
+    atomic_write_text(p, json.dumps(skin, ensure_ascii=False))
     return skin
 
 
 def delete_skin(skin_id: str) -> bool:
-    p = SKINS_DIR / f"{skin_id}.json"
+    p = SKINS_DIR / f"{safe_id(skin_id)}.json"
     if p.exists() and p.resolve().parent == SKINS_DIR.resolve():
         p.unlink()
         return True

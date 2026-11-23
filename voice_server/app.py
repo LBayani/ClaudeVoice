@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from aiohttp import web
 
 from .brain import make_brain
-from .config import ROOT, Config
+from .config import ROOT, Config, atomic_write_text
 from .mcp_bridge import DeviceRegistry, mcp_endpoint
 from .speakable import to_speakable
 
@@ -89,6 +89,9 @@ def load_services(cfg: Config, devices: DeviceRegistry | None = None, stage=lamb
         svc.last_ota = json.loads((cfg.logs_dir / "last_device.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         pass
+    from . import pairing
+    if (svc.last_ota or {}).get("ip") not in ("127.0.0.1", "::1", None):
+        pairing.migrate(svc.last_ota.get("device_id", ""))
     stage("мозг и характер")
     from . import camera, music   # registers their assistant tools
     svc.music = music.attach(cfg)
@@ -107,6 +110,11 @@ def _device_host(request: web.Request, cfg: Config) -> str:
     """The address the device just used to reach us is the one it can reach us on."""
     h = (request.host or "").rsplit(":", 1)[0].strip("[]")
     return h if h and h not in ("localhost", "127.0.0.1", "::1") else cfg.server.lan_host()
+
+
+def clean_field(v, limit: int = 40) -> str:
+    """Untrusted text from the LAN (headers, OTA body, discovery) -> short, plain: no markup, no control chars."""
+    return re.sub(r"[^\w.:+\- ]", "", str(v or ""))[:limit]
 
 
 def _ver(v: str) -> tuple[int, ...]:
@@ -133,7 +141,8 @@ async def ota(request: web.Request) -> web.Response:
             body = await request.json()
         except Exception:
             body = {}
-    version = (body.get("application") or {}).get("version", "0.0.0")
+    app_info = body.get("application") if isinstance(body, dict) else None
+    version = clean_field((app_info if isinstance(app_info, dict) else {}).get("version"), 32) or "0.0.0"
     host = _device_host(request, cfg)
     firmware = {"version": version, "url": ""}       # default: "you are up to date"
     new = firmware_version(OTA_DIR / OTA_FILE)
@@ -144,18 +153,28 @@ async def ota(request: web.Request) -> web.Response:
     log.info("OTA check from %s (Device-Id=%s, fw %s)", request.remote,
              request.headers.get("Device-Id"), version)
     svc = request.app["svc"]
-    svc.last_ota = {"time": time.time(), "ip": request.remote, "version": version,
-                    "device_id": request.headers.get("Device-Id", ""),
-                    "board": request.headers.get("User-Agent", "").split("/")[0]}
-    try:
-        (cfg.logs_dir / "last_device.json").write_text(json.dumps(svc.last_ota), encoding="utf-8")
-    except OSError:
-        pass
+    from . import pairing
+    device_id = clean_field(request.headers.get("Device-Id"), 40)
+    board = clean_field(request.headers.get("User-Agent", "").split("/")[0], 60)
+    # The token only goes to devices the user knows (see pairing.py); others wait for an OK in the app.
+    # A program on this PC (tools/fake_device.py) is trusted: it can read the token from the config anyway.
+    local = request.remote in ("127.0.0.1", "::1")
+    paired = local or pairing.check(device_id, request.remote, board, (svc.last_ota or {}).get("device_id", ""))
+    if not local:      # a test client on this PC is not "the device" (it would also hide the real one)
+        svc.last_ota = {"time": time.time(), "ip": request.remote, "version": version,
+                        "device_id": device_id, "board": board}
+        try:
+            atomic_write_text(cfg.logs_dir / "last_device.json", json.dumps(svc.last_ota))
+        except OSError:
+            pass
     offset_min = -time.timezone // 60 if not time.localtime().tm_isdst else -time.altzone // 60
+    websocket = {"url": _ws_url(cfg, host), "version": 1}
+    if paired:   # no "token" key at all otherwise: the firmware then keeps whatever token it already has
+        websocket["token"] = cfg.server.token
     return web.json_response({
         "server_time": {"timestamp": int(time.time() * 1000), "timezone_offset": offset_min},
         "firmware": firmware,
-        "websocket": {"url": _ws_url(cfg, host), "token": cfg.server.token, "version": 1},
+        "websocket": websocket,
     })
 
 
@@ -218,6 +237,9 @@ def build_app(svc: Services | None = None, devices: DeviceRegistry | None = None
     async def on_cleanup(_app):
         from . import ollama_manager
         ollama_manager.stop()
+        svc = _app.get("svc")
+        if svc is not None and getattr(svc, "music", None) is not None:
+            svc.music.stop_spotify()     # librespot must not outlive the server
     app.on_cleanup.append(on_cleanup)
     return app
 

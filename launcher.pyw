@@ -39,6 +39,7 @@ def start_server():
     flags = 0x00000008 | 0x00000200 | 0x08000000   # DETACHED_PROCESS | NEW_PROCESS_GROUP | NO_WINDOW
     subprocess.Popen([str(PYTHONW), "-m", "voice_server"], cwd=ROOT, env=env,
                      stdin=subprocess.DEVNULL, stdout=out, stderr=out, creationflags=flags, close_fds=True)
+    out.close()   # the child has its own copy of the handle
 
 
 def wait_with_splash(timeout=240) -> bool:

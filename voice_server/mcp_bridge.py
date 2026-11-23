@@ -54,8 +54,26 @@ def _rpc_error(req_id, code, message):
     return web.json_response({"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}})
 
 
-async def mcp_endpoint(request: web.Request) -> web.StreamResponse:
+def mcp_refuse_reason(request) -> str:
+    """/mcp is for the local `claude` CLI only. A web page in the browser could POST here too
+    (127.0.0.1 or a DNS-rebound name): it always sends Origin / Sec-Fetch-Site, and it can't send
+    Content-Type: application/json cross-site without a CORS preflight, which we never grant."""
+    from .settings_api import LOCAL_HOSTS, _hostname
     if request.remote not in ("127.0.0.1", "::1"):
+        return "remote"
+    if _hostname(request.host or "") not in LOCAL_HOSTS:
+        return "host"
+    if request.headers.get("Origin") or request.headers.get("Sec-Fetch-Site", "none") != "none":
+        return "browser"
+    if request.method == "POST" and not request.headers.get("Content-Type", "").lower().startswith("application/json"):
+        return "content-type"
+    return ""
+
+
+async def mcp_endpoint(request: web.Request) -> web.StreamResponse:
+    why = mcp_refuse_reason(request)
+    if why:
+        log.warning("refused /mcp from %s (%s, Origin=%s)", request.remote, why, request.headers.get("Origin"))
         raise web.HTTPForbidden()
     if request.method != "POST":
         raise web.HTTPMethodNotAllowed(request.method, ["POST"])

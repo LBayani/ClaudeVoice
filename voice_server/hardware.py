@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 from pathlib import Path
 
-from .config import ROOT
+from .config import ROOT, atomic_write_text
 
 FILE = ROOT / "hardware.json"
+log = logging.getLogger("hardware")
 
 # Display drivers the firmware knows. "oled" drivers are monochrome over I2C: skins become 1-bit.
 DRIVERS = {
@@ -116,8 +118,9 @@ def _merge(base: dict, over: dict) -> dict:
 
 # ---------------- chips ----------------
 TARGETS = {
-    "esp32s3": {"label": "ESP32-S3", "max_gpio": 48, "reserved": set(range(26, 33)), "touch": set(range(1, 15))},
-    "esp32c3": {"label": "ESP32-C3", "max_gpio": 21, "reserved": set(), "touch": set()},
+    "esp32s3": {"label": "ESP32-S3", "max_gpio": 48, "reserved": set(range(26, 33)), "touch": set(range(1, 15)),
+                "strapping": {0, 3, 45, 46}},
+    "esp32c3": {"label": "ESP32-C3", "max_gpio": 21, "reserved": set(), "touch": set(), "strapping": {2, 8, 9}},
 }
 AUDIO_CODECS = {
     "none": "Нет звука",
@@ -190,7 +193,7 @@ def migrate_legacy(device: str):
         DEVICES_DIR.mkdir(exist_ok=True)
         data = _merge(copy.deepcopy(DEFAULT), json.loads(FILE.read_text(encoding="utf-8")))
         data.setdefault("board", "zhengchen-1.54tft-wifi")
-        device_file(device).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_text(device_file(device), json.dumps(data, ensure_ascii=False, indent=2))
         FILE.rename(FILE.with_suffix(".json.migrated"))
 
 
@@ -213,13 +216,20 @@ def load(device: str = "") -> dict | None:
     if device:
         migrate_legacy(device)
         f = device_file(device)
-        if f.exists():
-            base = copy.deepcopy(BLANK if json.loads(f.read_text(encoding="utf-8")).get("board") != "zhengchen-1.54tft-wifi" else DEFAULT)
-            return _merge(base, json.loads(f.read_text(encoding="utf-8")))
-        return None
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except OSError:
+            return None
+        except ValueError:
+            log.warning("broken hardware profile %s: ignored (the device keeps its own copy)", f.name)
+            return None
+        if not isinstance(data, dict):
+            return None
+        base = copy.deepcopy(DEFAULT if data.get("board") == "zhengchen-1.54tft-wifi" else BLANK)
+        return _merge(base, data)
     try:
         return _merge(copy.deepcopy(DEFAULT), json.loads(FILE.read_text(encoding="utf-8")))
-    except (OSError, ValueError):
+    except (OSError, ValueError, TypeError, AttributeError):
         return copy.deepcopy(DEFAULT)
 
 
@@ -270,6 +280,9 @@ def validate(hw: dict) -> dict:
         if p >= 0:
             prev = used.get(p)
             if prev and not (role in shared and prev == role):
+                if "latch" in (prev + what):
+                    raise ValueError(f"GPIO{p} держит питание устройства («Питание latch»): "
+                                     f"его нельзя занять под «{what if 'latch' in prev else prev}»")
                 raise ValueError(f"GPIO{p} назначен дважды: «{prev}» и «{what}»")
             used[p] = role or what
         return p
@@ -347,13 +360,40 @@ def validate(hw: dict) -> dict:
     return hw
 
 
+def _used_pins(hw: dict) -> dict[int, str]:
+    out = {}
+    for k, v in hw["display"]["pins"].items():
+        out.setdefault(v, f"Дисплей {k}")
+    for k in AUDIO_PINS.get(hw["audio"]["codec"], ()):
+        out.setdefault(hw["audio"][k], f"Звук {k}")
+    for g in ("buttons", "power"):
+        for k, v in hw[g].items():
+            out.setdefault(v, f"{g} {k}")
+    for x in hw["inputs"] + hw["outputs"]:
+        out.setdefault(x["pin"], x["name"])
+    out.pop(-1, None)
+    return out
+
+
+def warnings(hw: dict) -> list[str]:
+    """Not errors, but worth a look: strapping pins decide how the chip boots."""
+    t = TARGETS.get(hw.get("target", "esp32s3"), TARGETS["esp32s3"])
+    boot = hw["buttons"].get("boot", -1)
+    out = []
+    for p, what in sorted(_used_pins(hw).items()):
+        if p in t["strapping"] and p != boot:
+            out.append(f"GPIO{p} («{what}») — strapping-пин {t['label']}: если при включении на нём не тот уровень, "
+                       "плата может не загрузиться или уйти в режим прошивки.")
+    return out
+
+
 def save(hw: dict, device: str = "") -> dict:
     hw = validate(hw)
     if device:
         DEVICES_DIR.mkdir(exist_ok=True)
-        device_file(device).write_text(json.dumps(hw, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_text(device_file(device), json.dumps(hw, ensure_ascii=False, indent=2))
     else:
-        FILE.write_text(json.dumps(hw, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_text(FILE, json.dumps(hw, ensure_ascii=False, indent=2))
     return hw
 
 

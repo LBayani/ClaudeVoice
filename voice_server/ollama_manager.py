@@ -43,6 +43,7 @@ def ensure_running(cfg: Config) -> str:
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     _proc = subprocess.Popen([str(exe), "serve"], env=env, stdin=subprocess.DEVNULL,
                              stdout=out, stderr=out, creationflags=flags)
+    out.close()   # the child has its own copy of the handle
     log.info("started private Ollama (pid %s) on port %s with models from %s",
              _proc.pid, o.managed_port, o.managed_models_dir)
     return "started"

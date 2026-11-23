@@ -8,13 +8,13 @@ user asked to stop.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import logging
 import os
 import shutil
 import subprocess
 import threading
-import time
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
@@ -221,12 +221,24 @@ class Music:
         start = self.st.position if t.seekable else 0.0
 
         def put(item):
-            if stop.is_set() and item is not None:
+            """Blocking hand-over to the event loop: waits while the queue is full (backpressure for
+            the decoder, incl. Spotify), never raises QueueFull, gives up once playback stopped."""
+            if stop.is_set():          # the consumer is gone: nobody reads the queue any more
                 return
             try:
-                loop.call_soon_threadsafe(q.put_nowait, item)
+                fut = asyncio.run_coroutine_threadsafe(q.put(item), loop)
             except RuntimeError:      # loop closed: playback is over
                 stop.set()
+                return
+            while not stop.is_set():
+                try:
+                    fut.result(timeout=0.5)
+                    return
+                except concurrent.futures.TimeoutError:
+                    continue
+                except Exception:
+                    stop.set()
+            fut.cancel()
 
         def worker():
             import av
@@ -256,9 +268,7 @@ class Music:
                         if stop.is_set():
                             break
                         for o in res.resample(frame):
-                            while q.qsize() > 48 and not stop.is_set():   # don't run far ahead
-                                time.sleep(0.05)
-                            put(o.to_ndarray().reshape(-1).astype(np.float32))
+                            put(o.to_ndarray().reshape(-1).astype(np.float32))   # blocks when 64 chunks ahead
             except Exception as e:
                 put(e)
             finally:

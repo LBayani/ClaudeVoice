@@ -12,10 +12,12 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import AsyncIterator, Optional
 
+from . import guard
 from .config import ClaudeCfg
 
 log = logging.getLogger("brain")
@@ -36,7 +38,17 @@ class EchoBrain:
         yield f"Вы сказали: {text}"
 
 
-_SENTENCE_END = re.compile(r"[.!?…](?=\s)|\n")
+_SENTENCE_END = re.compile(r"[.!?…](?=\s)|\n")   # a stop followed by a space: "3.5" stays whole
+
+
+def _guard_settings() -> str:
+    """Claude Code --settings with the PreToolUse hook that refuses irreversible actions (see guard.py)."""
+    py = Path(sys.executable)
+    if py.name.lower() == "pythonw.exe" and (py.parent / "python.exe").exists():
+        py = py.parent / "python.exe"            # the hook reports through stderr; pythonw has none
+    cmd = f'"{py.as_posix()}" -I "{Path(guard.__file__).resolve().as_posix()}"'
+    matcher = "|".join(guard.SHELL_TOOLS + guard.FILE_TOOLS)
+    return json.dumps({"hooks": {"PreToolUse": [{"matcher": matcher, "hooks": [{"type": "command", "command": cmd}]}]}})
 
 
 class ClaudeBrain(PromptMixin):
@@ -66,6 +78,8 @@ class ClaudeBrain(PromptMixin):
             a += ["--allowedTools", ",".join(allowed)]
         if self.cfg.disallowed_tools:
             a += ["--disallowedTools", ",".join(self.cfg.disallowed_tools)]
+        if any(t.split("(")[0] in guard.SHELL_TOOLS + guard.FILE_TOOLS for t in allowed):
+            a += ["--settings", _guard_settings()]
         if self.cfg.max_turns:
             a += ["--max-turns", str(self.cfg.max_turns)]
         idle = time.monotonic() - self.last_used
@@ -80,14 +94,17 @@ class ClaudeBrain(PromptMixin):
         async with self._lock:
             args = self._args()
             log.info("claude <- %r (resume=%s) %s", text, self.session_id, context)
+            # the guard hook lets risky actions through only in a turn whose utterance is an explicit "да"
+            env = dict(os.environ, CV_CONFIRMED="1" if guard.is_confirmation(text) else "0")
             if context:
                 text = f"{context}\n\n{text}"
             t0 = time.monotonic()
             proc = await asyncio.create_subprocess_exec(
-                *args, cwd=os.path.expandvars(self.cfg.cwd) if self.cfg.cwd else None,
+                *args, cwd=os.path.expandvars(self.cfg.cwd) if self.cfg.cwd else None, env=env,
                 stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE, limit=16 << 20,
             )
+            stderr_task = asyncio.create_task(proc.stderr.read())   # drained alongside stdout: no pipe deadlock
             proc.stdin.write(text.encode("utf-8"))
             await proc.stdin.drain()
             proc.stdin.close()
@@ -133,7 +150,7 @@ class ClaudeBrain(PromptMixin):
                     yield buf
                 await proc.wait()
                 if proc.returncode:
-                    err = (await proc.stderr.read()).decode("utf-8", "replace")[-500:]
+                    err = (await stderr_task).decode("utf-8", "replace")[-500:]
                     log.warning("claude exited %s: %s", proc.returncode, err)
                     if first:
                         yield "Не получилось связаться с Клодом."
@@ -142,6 +159,8 @@ class ClaudeBrain(PromptMixin):
                 if proc.returncode is None:
                     log.info("claude turn cancelled, killing pid %s", proc.pid)
                     _kill_tree(proc.pid)
+                if not stderr_task.done():
+                    stderr_task.cancel()
 
 
 def _kill_tree(pid: int):

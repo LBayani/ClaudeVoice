@@ -10,6 +10,7 @@ import asyncio
 import json
 import sys
 import time
+import urllib.parse
 import wave
 from pathlib import Path
 
@@ -65,7 +66,8 @@ async def main():
             ota = await r.json()
         print("OTA ->", {k: v for k, v in ota.items() if k != "websocket"},
               "| ws:", ota["websocket"]["url"])
-        ws_url = ota["websocket"]["url"].replace(cfg.server.public_host, args.host)
+        u = urllib.parse.urlsplit(ota["websocket"]["url"])    # same port and path, our host
+        ws_url = urllib.parse.urlunsplit(u._replace(netloc=f"{args.host}:{u.port or cfg.server.port}"))
         headers["Authorization"] = f"Bearer {ota['websocket']['token']}"
 
         async with http.ws_connect(ws_url, headers=headers) as ws:

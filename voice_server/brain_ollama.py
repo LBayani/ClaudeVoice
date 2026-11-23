@@ -12,7 +12,6 @@ import aiohttp
 
 from .brain import PromptMixin
 from .config import OllamaCfg
-from .mcp_bridge import claude_name
 
 if TYPE_CHECKING:
     from .mcp_bridge import DeviceRegistry

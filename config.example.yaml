@@ -29,17 +29,12 @@ claude:
   cwd: "%USERPROFILE%"        # folder Claude works in
   model: ""                   # empty = your Claude Code default; e.g. sonnet for faster answers
   # Tools Claude may use on its own. Voice mode can't ask you, anything else is refused.
-  permission_mode: acceptEdits
-  allowed_tools: [Read, Glob, Grep, WebSearch, WebFetch, Bash, PowerShell, Edit, Write, NotebookEdit]
-  # Hard blocks for the worst cases. Other risky actions: Claude asks "да?" by voice first.
-  disallowed_tools:
-    - "Bash(rm -rf:*)"
-    - "Bash(format:*)"
-    - "Bash(shutdown:*)"
-    - "PowerShell(Format-Volume:*)"
-    - "PowerShell(Clear-Disk:*)"
-    - "PowerShell(Stop-Computer:*)"
-    - "PowerShell(Restart-Computer:*)"
-    - "PowerShell(Remove-Item * -Recurse*)"
+  # Safe default: read-only. Shell and file editing are opt-in, because anyone in the room can talk
+  # to the device. If you add them (Bash, PowerShell, Edit, Write), ClaudeVoice installs a hook that
+  # refuses deleting, installing, shutting down and unreadable (encoded / inline) commands unless
+  # your phrase in that turn was an explicit "да". That filter is a safety net, not a sandbox.
+  permission_mode: default
+  allowed_tools: [Read, Glob, Grep, WebSearch, WebFetch]
+  disallowed_tools: []
   new_conversation_after_min: 30
   extra_args: ["--strict-mcp-config"]   # skip MCP servers: ~2.5 s faster start

@@ -9,7 +9,7 @@ import json
 import re
 import time
 
-from .config import ROOT
+from .config import ROOT, atomic_write_text
 
 PERSONAS_DIR = ROOT / "personas"
 
@@ -83,6 +83,15 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower().translate(tr)).strip("-") or f"persona-{int(time.time())}"
 
 
+_SAFE_ID = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+
+
+def safe_id(value: str) -> str:
+    """A user-supplied id as a plain file name: never a path ("../../settings" -> "settings")."""
+    v = str(value or "")
+    return v if _SAFE_ID.fullmatch(v) else _slug(v)[:64].strip("-") or _slug("")
+
+
 def list_personas() -> list[dict]:
     out = [dict(p, builtin=True) for p in BUILTIN]
     PERSONAS_DIR.mkdir(exist_ok=True)
@@ -104,18 +113,21 @@ def save_persona(data: dict) -> dict:
     prompt = (data.get("prompt") or "").strip()[:3000]
     if not name or not prompt:
         raise ValueError("нужны название и описание характера")
-    pid = data.get("id") or _slug(name)
+    pid = safe_id(data.get("id") or _slug(name))
     if pid in {p["id"] for p in BUILTIN}:
         pid += "-custom"
     p = {"id": pid, "name": name, "desc": (data.get("desc") or "свой характер").strip()[:80],
          "sample": (data.get("sample") or "").strip()[:200], "prompt": prompt, "updated": int(time.time())}
     PERSONAS_DIR.mkdir(exist_ok=True)
-    (PERSONAS_DIR / f"{pid}.json").write_text(json.dumps(p, ensure_ascii=False, indent=1), encoding="utf-8")
+    f = PERSONAS_DIR / f"{pid}.json"
+    if f.resolve().parent != PERSONAS_DIR.resolve():
+        raise ValueError("недопустимый id характера")
+    atomic_write_text(f, json.dumps(p, ensure_ascii=False, indent=1))
     return p
 
 
 def delete_persona(pid: str) -> bool:
-    f = PERSONAS_DIR / f"{pid}.json"
+    f = PERSONAS_DIR / f"{safe_id(pid)}.json"
     if f.exists() and f.resolve().parent == PERSONAS_DIR.resolve():
         f.unlink()
         return True

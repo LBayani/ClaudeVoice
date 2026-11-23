@@ -16,7 +16,7 @@ import string
 import subprocess
 import webbrowser
 from pathlib import Path
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from .mcp_bridge import claude_name
 
@@ -39,11 +39,18 @@ KNOWN_APPS = {
     "почта": "outlookmail:", "календарь": "outlookcal:", "магазин": "ms-windows-store:",
     "браузер": "https://www.google.com", "интернет": "https://www.google.com",
 }
-# Never run these through the PowerShell tool, whatever the model says.
+# Never run these through the PowerShell tool, whatever the model says. NOT a complete filter: PowerShell
+# has endless ways around a pattern list, so the tool stays off unless the user turns it on knowingly.
+# guard.py's wider list (deleting, installing, encoded / inline code, downloads) is applied as well.
 BLOCKED_PS = [r"format-volume", r"clear-disk", r"stop-computer", r"restart-computer", r"remove-item\b.*-recurse",
               r"\brm\b.*-r", r"\bdel\b.*\/s", r"rmdir\b.*\/s", r"\bformat\b\s+[a-z]:", r"diskpart", r"bcdedit",
               r"set-executionpolicy", r"reg\s+delete", r"remove-itemproperty", r"invoke-webrequest.*\|\s*iex",
               r"\biex\b", r"invoke-expression", r"shutdown"]
+# Files opened directly by voice: documents and media only. Anything else (.cpl, .msc, .hta, .wsf, .py,
+# .jar, .url, ...) is shown selected in Explorer instead of being run.
+DOC_EXT = {".txt", ".md", ".log", ".csv", ".pdf", ".doc", ".docx", ".rtf", ".odt", ".xls", ".xlsx", ".ods",
+           ".ppt", ".pptx", ".odp", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".heic", ".svg", ".mp3",
+           ".wav", ".flac", ".ogg", ".m4a", ".mp4", ".mkv", ".avi", ".mov", ".webm", ".epub", ".djvu", ".fb2"}
 EXEC_EXT = {".exe", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".msi", ".scr", ".com", ".lnk", ".reg"}
 
 
@@ -102,6 +109,9 @@ def open_folder(path: str) -> str:
         return f"Путь {target} не найден."
     if target.is_file() and target.suffix.lower() in EXEC_EXT:
         return "Запускать файлы программ так нельзя: используй pc_open_app."
+    if target.is_file() and target.suffix.lower() not in DOC_EXT:
+        subprocess.run(["explorer.exe", f"/select,{target.resolve()}"], timeout=10)
+        return f"Показал файл {target.name} в проводнике (такие файлы голосом не открываю)."
     os.startfile(str(target))
     return f"Открыл {target}"
 
@@ -123,10 +133,11 @@ def system_info() -> str:
 
 
 def run_powershell(command: str) -> str:
+    from . import guard
     low = command.lower()
-    for pat in BLOCKED_PS:
-        if re.search(pat, low):
-            return "Эта команда запрещена настройками безопасности."
+    if any(re.search(pat, low) for pat in BLOCKED_PS) or guard.risky("PowerShell", {"command": command}):
+        return ("Эта команда запрещена настройками безопасности: удаление, установка, выключение и непрозрачные "
+                "команды голосом не выполняются. Скажи пользователю сделать это самому.")
     try:
         r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
                            capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace",
@@ -148,7 +159,8 @@ PC_TOOLS = {
     "pc_system_info": (system_info, "Узнать дату, день недели, время и свободное место на дисках компьютера.", {}),
 }
 PS_TOOL = ("pc_run_powershell", run_powershell, "Выполнить команду PowerShell на компьютере пользователя и получить "
-           "её вывод. Опасные команды (удаление, форматирование, выключение) заблокированы.",
+           "её вывод. Только для чтения и безопасных действий: удаление, установка программ, выключение и "
+           "закодированные команды отклоняются (фильтр неполный, не пытайся его обойти).",
            {"command": {"type": "string", "description": "команда PowerShell"}})
 
 

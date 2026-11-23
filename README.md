@@ -11,7 +11,8 @@ ClaudeVoice server on your PC: Silero VAD → faster-whisper (ASR) → brain →
   brain = Claude Code · Ollama · LM Studio / Bionic / llama.cpp / vLLM / any OpenAI-compatible engine
 ```
 
-Features: barge-in, characters (personas), 8 recolourable screen skins + a skin editor, local models
+Features: interrupting an answer (wake word, button or antenna — the server ignores the mic while the
+device speaks, since it would hear itself), characters (personas), 8 recolourable screen skins + a skin editor, local models
 that can open apps on the PC, device auto-discovery on the LAN, a hardware profile (display, pins,
 antennae actions, outputs), music (YouTube, Yandex Music, radio, Spotify), camera (ESP32-CAM, PC/IP
 camera, board module), a settings app and a tray launcher. Interface language: Russian.
@@ -41,7 +42,7 @@ Open the settings app at http://127.0.0.1:8765/ui. First start downloads Whisper
 Tray launcher (no console window; starts the server hidden, restarts it on crash, opens the app):
 
 ```powershell
-uv run --with pyinstaller pyinstaller --noconfirm --onefile --windowed --name ClaudeVoice --icon "$PWD\assets\app.ico" --distpath . --workpath build_exe --specpath build_exe tray_app.py
+uv run --with pyinstaller pyinstaller --noconfirm --onefile --windowed --name ClaudeVoice --icon "$PWD\assets\app.ico" --exclude-module numpy --distpath . --workpath build_exe --specpath build_exe tray_app.py
 ```
 
 The exe is only the tray shell (~16 MB): AI libraries and models stay in `.venv` and `models/`.
@@ -103,8 +104,9 @@ Everything about the wiring lives in `hardware.json` and is edited in the app (*
 - **Audio, buttons, power** pins, and **camera module** pins for boards that have one.
 
 The device downloads the profile at boot from `/device/hardware.json` (and at once when you press
-**Save**); pin/display changes reboot it. A wrong profile never bricks it: hold **Volume −** while
-powering on to boot with the built-in defaults, then fix the profile in the app.
+**Save**); pin/display changes reboot it. A wrong profile never bricks it: hold **BOOT** right after powering
+on (the universal firmware) or **Volume −** (the zhengchen 1.54" build) to boot with the built-in
+defaults, then fix the profile in the app.
 
 ## Music
 
@@ -131,6 +133,30 @@ brains use a vision model (set one, e.g. `qwen2.5vl:7b`, if the chat model canno
 `config.yaml`, `settings.json` (API keys, Yandex token) and `hardware.json` stay on your PC and are
 git-ignored. The settings app and its API answer only on localhost.
 
+## Threat model (read before enabling shell tools)
+
+ClaudeVoice is built for a **home LAN you trust**. What it protects and what it does not:
+
+- **Settings app / API** (`/ui`, `/api/*`): only from this PC. Requests must come from 127.0.0.1 with a
+  `localhost` / `127.0.0.1` Host (stops DNS rebinding); state-changing calls also need the `X-CV-App`
+  header that only the app sends, and requests with a foreign `Origin` are refused (stops CSRF from
+  web pages you open in the browser).
+- **Device ⇄ server** is plain HTTP + WebSocket, **no TLS**: anyone on the LAN can listen to the audio
+  and the replies. Encryption (wss) is on the roadmap.
+- **Device token**: the OTA endpoint hands the WebSocket token only to devices you know — boards set up
+  by the wizard or in **Железо**, boards you allow in the app («Новое устройство просит подключиться»),
+  and the first board of a fresh install. Device-Id is the MAC address, which others on the LAN can
+  see and copy, so this keeps out strangers and stray gadgets, not a skilled attacker inside your network.
+- **Discovery** (UDP 8766): a device pairs with the first server that answers. A rogue server on the LAN
+  could answer first; once paired, the device prefers its server's id.
+- **The voice is the key.** The device hears everyone in the room (and the TV). By default Claude only
+  reads (files, web). Shell and file editing are opt-in; when on, a server-side hook refuses deleting,
+  installing, shutting down and unreadable (encoded / inline) commands unless your phrase in that turn
+  was an explicit «да». It is a safety net with an incomplete pattern list, **not a sandbox**: give shell
+  tools only on a PC where a wrong command is not a disaster. The same goes for PowerShell for local
+  models («Действия на компьютере»), which is off by default.
+- Firmware images downloaded by the wizard are checked against `SHA256SUMS.txt` of the release.
+
 ## Moving to another server
 
 Copy the folder and start it there: the device finds the new server by itself (UDP discovery).
@@ -148,6 +174,8 @@ Copy the folder and start it there: the device finds the new server by itself (U
 | `voice_server/tts.py` | Silero TTS |
 | `voice_server/speakable.py` | Markdown/numbers/Latin → speakable Russian |
 | `voice_server/brain.py` | Claude Code brain (+ `brain_ollama.py`, `brain_openai.py` for local engines) |
+| `voice_server/guard.py` | Hook that refuses irreversible shell / file actions without a spoken «да» |
+| `voice_server/pairing.py` | Which devices get the WebSocket token |
 | `voice_server/discovery.py` | UDP 8766 auto-discovery responder |
 | `voice_server/hardware.py` | Hardware profile: validation, presets, actions |
 | `voice_server/server_tools.py` | Body tools for every brain (inputs, music, camera) |

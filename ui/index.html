@@ -130,6 +130,9 @@ table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:7px 8px;
 <section id="s-overview" class="on">
   <h2>Обзор</h2><p class="sub">Состояние сервера, устройства и быстрый тест мозга.</p>
   <div class="grid">
+    <div class="card" id="ov-pending" style="display:none;border-color:var(--warn,#d9a400)"><h3>Новое устройство просит подключиться</h3>
+      <div class="hint">Разрешайте только свои платы: подключённое устройство слушает вас и управляет ассистентом.</div>
+      <div id="ov-pending-list"></div></div>
     <div class="card"><h3>Устройство</h3><dl class="kv" id="ov-device"></dl></div>
     <div class="card"><h3>Сервер</h3><dl class="kv" id="ov-server"></dl>
       <div class="row" style="margin-top:14px">
@@ -163,7 +166,7 @@ table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:7px 8px;
       </div>
       <div class="card"><h3>Что можно без спроса</h3>
         <div id="cl-tools"></div>
-        <div class="hint">В голосовом режиме Claude не может переспросить разрешение: всё, что не отмечено, будет отклонено. Форматирование дисков, выключение ПК и рекурсивное удаление заблокированы всегда.</div>
+        <div class="hint">В голосовом режиме Claude не может переспросить разрешение: всё, что не отмечено, будет отклонено. Команды и правка файлов дают доступ к ПК любому, кто говорит рядом с устройством. Удаление, установку программ, выключение и непонятные (закодированные) команды сервер пропускает, только если ваша фраза в этот раз — явное «да». Фильтр неполный: это страховка, а не песочница.</div>
       </div>
     </div>
   </div>
@@ -171,7 +174,7 @@ table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:7px 8px;
   <div id="b-pc" class="card"><h3>Действия на компьютере</h3>
     <div class="row"><label class="switch"><input type="checkbox" id="pc-on"><i></i>Открывать программы, сайты и папки, узнавать дату и место на дисках</label></div>
     <div class="row" style="margin-top:10px"><label class="switch"><input type="checkbox" id="pc-ps"><i></i>Выполнять команды PowerShell</label></div>
-    <div class="hint">Команды PowerShell дают локальной модели почти полный доступ к ПК, а устройство слышит всех в комнате. Удаление, форматирование, выключение и запуск скачанных скриптов заблокированы всегда.</div>
+    <div class="hint">Команды PowerShell дают локальной модели почти полный доступ к ПК, а устройство слышит всех в комнате. Удаление, установка, выключение и закодированные команды отклоняются, но фильтр неполный — включайте, только если действительно нужно.</div>
   </div>
 
   <div id="b-openai">
@@ -347,7 +350,7 @@ table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:7px 8px;
 <!-- HARDWARE -->
 <section id="s-hw">
   <h2>Железо</h2><p class="sub">Все технические детали устройства: дисплей, выводы, антенки и кнопки, выходы. Сохраняется в программе (hardware.json) и применяется на устройстве.</p>
-  <div class="note">Если после смены дисплея или пинов экран не работает — включите устройство, удерживая кнопку <b>«громкость −»</b>: оно загрузится с заводскими настройками, а вы исправите профиль здесь.</div>
+  <div class="note">Если после смены дисплея или пинов экран не работает — включите устройство, удерживая кнопку <b>BOOT</b> (на плате zhengchen 1.54 — <b>«громкость −»</b>): оно загрузится с заводскими настройками, а вы исправите профиль здесь.</div>
   <div class="card"><h3>Устройство</h3>
     <div class="row"><div style="flex:1;min-width:200px"><label class="f">Чьи настройки</label><select id="hw-dev"></select></div>
       <div style="flex:2;min-width:240px"><label class="f">Загрузить готовое описание платы</label><div class="row"><select id="hw-board" style="flex:1"></select><button id="hw-board-load">Загрузить</button></div></div></div>
@@ -526,7 +529,13 @@ table{width:100%;border-collapse:collapse;font-size:13px} td,th{padding:7px 8px;
 <script src="/ui/engine/eyes_engine.js"></script>
 <script src="/ui/engine/skins_render.js"></script>
 <script>
+{ // every request of the app carries X-CV-App: the server refuses state-changing calls without it (CSRF guard)
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = (url, opts = {}) => nativeFetch(url, {...opts, headers: {...(opts.headers || {}), "X-CV-App": "1"}});
+}
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+// Everything that comes from the server, the device or the LAN goes through esc() before innerHTML.
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 let S = null, tab = "overview", ollama = {models: []};
 
 function toast(msg, err) { const t = $("#toast"); t.textContent = msg; t.className = "toast on" + (err ? " err" : ""); clearTimeout(t._h); t._h = setTimeout(() => t.className = "toast", 3200); }
@@ -544,7 +553,7 @@ async function dev(tool, args = {}, msg) {
   catch (e) { toast(e.message, true); }
 }
 const ago = t => { if (!t) return "никогда"; const s = Math.round(Date.now() / 1000 - t); return s < 60 ? s + " с назад" : s < 3600 ? Math.round(s / 60) + " мин назад" : Math.round(s / 3600) + " ч назад"; };
-const kv = (el, rows) => el.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v ?? "—"}</dd>`).join("");
+const kv = (el, rows) => el.innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v == null || v === "" ? "—" : esc(v).replace(/\n/g, "<br>")}</dd>`).join("");
 function pill(id, cls, text) { const p = $(id); p.className = "pill " + cls; p.lastChild.textContent = text; }
 
 // navigation
@@ -563,6 +572,7 @@ const OA_PRESETS = [["lmstudio", "LM Studio", "http://127.0.0.1:1234/v1"], ["bio
   ["vllm", "vLLM", "http://127.0.0.1:8000/v1"], ["koboldcpp", "KoboldCpp", "http://127.0.0.1:5001/v1"], ["jan", "Jan", "http://127.0.0.1:1337/v1"],
   ["textgen", "text-generation-webui", "http://127.0.0.1:5000/v1"], ["ollama", "Ollama (OpenAI-режим)", "http://127.0.0.1:11434/v1"], ["custom", "Свой адрес", ""]];
 let oa = {reachable: null, models: []};
+const CL_RISKY = ["Bash", "PowerShell", "Edit", "Write"];
 const CL_TOOLS = [["Read", "Читать файлы"], ["Glob", "Искать файлы"], ["Grep", "Искать в файлах"], ["WebSearch", "Поиск в интернете"], ["WebFetch", "Открывать страницы"], ["Bash", "Команды Bash"], ["PowerShell", "Команды PowerShell"], ["Edit", "Править файлы"], ["Write", "Создавать файлы"]];
 const REC = [["qwen3:14b", "Qwen 3 14B · 9 ГБ · лучший баланс"], ["qwen3:8b", "Qwen 3 8B · 5 ГБ · быстрее"], ["qwen3:30b-a3b", "Qwen 3 30B MoE · 19 ГБ · умнее, быстро"], ["gemma3:12b", "Gemma 3 12B · 8 ГБ · без инструментов"]];
 const EMO = [["happy", "Радость"], ["surprised", "Удивление"], ["sad", "Грусть"], ["angry", "Злость"], ["thinking", "Задумчивость"], ["sleepy", "Сонливость"], ["neutral", "Спокойствие"]];
@@ -575,6 +585,12 @@ function render() {
   pill("#p-device", online ? "ok" : (d.last_ota.time ? "warn" : "bad"), online ? "устройство на связи" : d.last_ota.time ? "устройство спит" : "устройство не найдено");
   pill("#p-brain", c.brain === "ollama" && !ollama.reachable ? "bad" : "ok", "мозг: " + BRAIN_NAMES[c.brain] + (c.brain === "ollama" && c.ollama.model ? " · " + c.ollama.model : ""));
 
+  const pend = S.pending_devices || [];
+  $("#ov-pending").style.display = pend.length ? "" : "none";
+  $("#ov-pending-list").innerHTML = pend.map(p => `<div class="row" style="margin-top:8px"><span style="flex:1">${esc(p.device)}${p.board ? " · " + esc(p.board) : ""} · ${esc(p.ip)}</span>
+    <button class="pri" data-allow="${esc(p.device)}">Разрешить</button><button data-deny="${esc(p.device)}">Не моё</button></div>`).join("");
+  $$("#ov-pending-list [data-allow]").forEach(b => b.onclick = async () => { await api("/api/devices/allow", {device: b.dataset.allow}); toast("Разрешено: устройство подключится в течение минуты"); refresh(); });
+  $$("#ov-pending-list [data-deny]").forEach(b => b.onclick = async () => { await api("/api/devices/allow", {device: b.dataset.deny, allow: false}); refresh(); });
   const st = d.status || {};
   kv($("#ov-device"), [["Связь", online ? "на связи" : "спит (подключается по кнопке или слову)"], ["Плата", d.last_ota.board], ["Прошивка", d.last_ota.version], ["IP", d.last_ota.ip],
     ["Последний выход на связь", ago(d.last_ota.time)], ["Батарея", st.battery ? st.battery.level + "%" + (st.battery.charging ? " · заряжается" : "") : "—"]]);
@@ -596,7 +612,10 @@ function render() {
   if (document.activeElement !== $("#cl-cwd")) $("#cl-cwd").value = c.claude.cwd;
   $("#cl-model").value = c.claude.model; $("#cl-dev").checked = c.claude.device_tools;
   $("#cl-tools").innerHTML = CL_TOOLS.map(([k, n]) => `<label class="chk"><input type="checkbox" data-t="${k}" ${c.claude.allowed_tools.includes(k) ? "checked" : ""}>${n}</label>`).join("");
-  $$("#cl-tools input").forEach(i => i.onchange = () => save({claude: {allowed_tools: $$("#cl-tools input:checked").map(x => x.dataset.t)}}));
+  $$("#cl-tools input").forEach(i => i.onchange = () => {
+    if (i.checked && CL_RISKY.includes(i.dataset.t) && !confirm("Разрешить Claude «" + i.parentNode.textContent.trim() + "» по голосу без спроса?\n\nУстройство слышит всех в комнате. Необратимые действия сервер пропустит только после вашего «да», но фильтр неполный.")) { i.checked = false; return; }
+    save({claude: {allowed_tools: $$("#cl-tools input:checked").map(x => x.dataset.t)}});
+  });
   if (document.activeElement !== $("#ol-url")) $("#ol-url").value = c.ollama.url;
   $("#ol-url").disabled = c.ollama.managed;
   $("#ol-managed").checked = c.ollama.managed;
@@ -606,7 +625,7 @@ function render() {
   renderOllamaModels();
 
   // voice
-  $("#speakers").innerHTML = S.speakers.map(s => `<div class="row" style="margin-bottom:6px"><label class="chk" style="width:120px"><input type="radio" name="spk" value="${s}" ${s === c.tts.speaker ? "checked" : ""}>${s}</label><button data-play="${s}">▶ проба</button></div>`).join("");
+  $("#speakers").innerHTML = S.speakers.map(s => `<div class="row" style="margin-bottom:6px"><label class="chk" style="width:120px"><input type="radio" name="spk" value="${esc(s)}" ${s === c.tts.speaker ? "checked" : ""}>${esc(s)}</label><button data-play="${s}">▶ проба</button></div>`).join("");
   $$("#speakers input").forEach(i => i.onchange = () => save({tts: {speaker: i.value}}, "Голос: " + i.value));
   $$("#speakers [data-play]").forEach(b => b.onclick = () => play(b.dataset.play));
   setRange("#vad", c.vad.min_silence_ms, v => v + " мс"); setRange("#idle", c.session.idle_timeout_s, v => v + " с"); setRange("#fill", c.session.filler_after_s, v => v + " с");
@@ -620,7 +639,7 @@ function render() {
   const a = d.antennae;
   if (a && a.affection !== undefined) {
     $("#aff").textContent = Math.round(a.affection * 100) + "%"; $("#aff-bar").style.width = a.affection * 100 + "%";
-    kv($("#ant"), [["Касаний с включения", a.touches_since_boot], ["Последнее касание", a.minutes_since_last_touch.toFixed(0) + " мин назад"], ["Трогают сейчас", a.touched_now ? "да ♥" : "нет"], ["Датчики", (a.inputs || []).map(i => `${i.name} (GPIO${i.gpio}): ${i.type === "touch" ? i.raw + " / фон " + i.baseline : i.pressed ? "нажата" : "отпущена"}`).join("<br>") || "—"]]);
+    kv($("#ant"), [["Касаний с включения", a.touches_since_boot], ["Последнее касание", a.minutes_since_last_touch.toFixed(0) + " мин назад"], ["Трогают сейчас", a.touched_now ? "да ♥" : "нет"], ["Датчики", (a.inputs || []).map(i => `${i.name} (GPIO${i.gpio}): ${i.type === "touch" ? i.raw + " / фон " + i.baseline : i.pressed ? "нажата" : "отпущена"}`).join("\n") || "—"]]);
   }
 
   // firmware
@@ -669,7 +688,7 @@ $("#servo-rel").onclick = () => dev("self.gpio.release", {pin: +$("#servo-pin").
 async function loadPins() {
   const r = await dev("self.gpio.list_pins"); if (!r || !r.pins) return;
   const MODE = {free: "свободен", output: "выход", input: "вход", pwm: "ШИМ", servo: "серво", antenna: "антенка"};
-  $("#pins").innerHTML = "<tr><th>Вывод</th><th>Режим</th><th class='r'></th></tr>" + r.pins.map(p => `<tr><td class="mono">GPIO${p.gpio}</td><td>${MODE[p.mode] || p.mode}</td><td class="r">${p.mode === "antenna" ? "" : `<button data-hi="${p.gpio}">1</button> <button data-lo="${p.gpio}">0</button> <button data-rd="${p.gpio}">прочитать</button>`}</td></tr>`).join("");
+  $("#pins").innerHTML = "<tr><th>Вывод</th><th>Режим</th><th class='r'></th></tr>" + r.pins.map(p => `<tr><td class="mono">GPIO${+p.gpio}</td><td>${esc(MODE[p.mode] || p.mode)}</td><td class="r">${p.mode === "antenna" ? "" : `<button data-hi="${+p.gpio}">1</button> <button data-lo="${+p.gpio}">0</button> <button data-rd="${+p.gpio}">прочитать</button>`}</td></tr>`).join("");
   $$("#pins [data-hi]").forEach(b => b.onclick = () => dev("self.gpio.write", {pin: +b.dataset.hi, level: 1}, "GPIO" + b.dataset.hi + " = 1").then(loadPins));
   $$("#pins [data-lo]").forEach(b => b.onclick = () => dev("self.gpio.write", {pin: +b.dataset.lo, level: 0}, "GPIO" + b.dataset.lo + " = 0").then(loadPins));
   $$("#pins [data-rd]").forEach(b => b.onclick = async () => { const v = await dev("self.gpio.read", {pin: +b.dataset.rd, pull: "up"}); if (v !== undefined) toast("GPIO" + b.dataset.rd + " = " + v); loadPins(); });
@@ -696,8 +715,8 @@ function renderOllamaModels() {
   const c = S.config.ollama;
   $("#ol-down").style.display = ollama.reachable ? "none" : ""; $("#ol-url-t").textContent = c.url;
   const names = ollama.models.map(m => m.name);
-  const opts = (c.model && !names.includes(c.model) ? [`<option value="${c.model}">${c.model} (не скачана)</option>`] : [])
-    .concat(ollama.models.length ? ollama.models.map(m => `<option value="${m.name}">${m.name} · ${m.params || ""} · ${m.size_gb} ГБ</option>`) : [`<option value="">— моделей нет, скачайте справа —</option>`]);
+  const opts = (c.model && !names.includes(c.model) ? [`<option value="${esc(c.model)}">${esc(c.model)} (не скачана)</option>`] : [])
+    .concat(ollama.models.length ? ollama.models.map(m => `<option value="${esc(m.name)}">${esc(m.name)} · ${esc(m.params || "")} · ${esc(m.size_gb)} ГБ</option>`) : [`<option value="">— моделей нет, скачайте справа —</option>`]);
   if (document.activeElement !== $("#ol-model")) { $("#ol-model").innerHTML = opts.join(""); $("#ol-model").value = c.model; }
   $("#ol-info").textContent = ollama.reachable ? `Ollama ${ollama.version} · моделей: ${ollama.models.length}` : "";
   $("#ol-rec").innerHTML = REC.map(([m, d]) => `<button data-m="${m}" title="${d}">${names.includes(m) ? "✓ " : ""}${d}</button>`).join("");
@@ -737,7 +756,7 @@ function renderOpenAI() {
   $("#oa-down").style.display = oa.reachable === false ? "" : "none";
   if (document.activeElement !== $("#oa-model")) {
     const list = oa.models.includes(o.model) || !o.model ? oa.models : [o.model, ...oa.models];
-    $("#oa-model").innerHTML = list.length ? list.map(m => `<option>${m}</option>`).join("") : `<option value="">— нет списка: проверьте подключение —</option>`;
+    $("#oa-model").innerHTML = list.length ? list.map(m => `<option>${esc(m)}</option>`).join("") : `<option value="">— нет списка: проверьте подключение —</option>`;
     $("#oa-model").value = o.model;
   }
 }
@@ -775,7 +794,7 @@ $("#oa-start").onclick = async () => {
 $("#oa-find").onclick = async () => {
   $("#oa-found").innerHTML = '<span class="hint">ищу…</span>';
   const r = await api("/api/openai/discover");
-  $("#oa-found").innerHTML = r.engines.length ? r.engines.map(e => `<button data-u="${e.url}" title="${e.models.join(", ")}">${e.name} · :${e.port} · моделей ${e.models.length}</button>`).join("")
+  $("#oa-found").innerHTML = r.engines.length ? r.engines.map(e => `<button data-u="${esc(e.url)}" title="${esc((e.models || []).join(", "))}">${esc(e.name)} · :${esc(e.port)} · моделей ${(e.models || []).length}</button>`).join("")
     : '<span class="hint">Ничего не найдено. Запустите сервер в своём движке (в LM Studio: Developer → Start Server).</span>';
   $$("#oa-found [data-u]").forEach(b => b.onclick = async () => { $("#oa-url").value = b.dataset.u; await refreshOA();
     if (oa.models.length && !oa.models.includes(S.config.openai.model)) save({openai: {model: oa.models[0]}}, "Модель: " + oa.models[0]); });
@@ -804,10 +823,10 @@ async function loadSkins() {
   const activePal = legacy ? SK.active.split("-")[1] : SK.active_palette;
   $("#skin-grid").innerHTML = SK.skins.map(s => {
     const on = s.id === activeId;
-    const sw = Object.entries(SK.palettes).map(([p, st]) => `<i data-p="${p}" title="${SK.palette_names[p] || p}" style="background:${swatch(st)}" class="${on && activePal === p ? "on" : ""}"></i>`).join("");
-    return `<div class="sk ${on ? "on" : ""}" data-id="${s.id}">
+    const sw = Object.entries(SK.palettes).map(([p, st]) => `<i data-p="${esc(p)}" title="${esc(SK.palette_names[p] || p)}" style="background:${esc(swatch(st))}" class="${on && activePal === p ? "on" : ""}"></i>`).join("");
+    return `<div class="sk ${on ? "on" : ""}" data-id="${esc(s.id)}">
     ${on ? '<span class="badge">АКТИВЕН</span>' : ""}<canvas width="240" height="240"></canvas>
-    <div class="nm" title="${s.name}">${s.name}</div><div class="ds">${s.desc || (s.builtin ? "" : "свой скин")}</div>
+    <div class="nm" title="${esc(s.name)}">${esc(s.name)}</div><div class="ds">${esc(s.desc || (s.builtin ? "" : "свой скин"))}</div>
     <div class="sw">${sw}</div>
     <div class="act"><button data-apply>Применить</button><button data-edit title="Взять за основу">✎</button>${s.builtin ? "" : '<button data-exp title="Экспорт">⇩</button><button data-del title="Удалить">✕</button>'}</div></div>`;
   }).join("");
@@ -827,7 +846,7 @@ async function loadSkins() {
       if (!confirm(`Удалить скин «${s.name}»?`)) return; await fetch(`/api/skins/${s.id}`, {method: "DELETE"}); toast("Скин удалён"); loadSkins(); };
   });
   if (!edSkin) editFrom(SK.skins.find(s => s.id === SK.active) || SK.skins[0], true);
-  $("#ed-pal-preset").innerHTML = `<option value="">свои цвета</option>` + Object.keys(SK.palettes).map(p => `<option value="${p}">${p}</option>`).join("");
+  $("#ed-pal-preset").innerHTML = `<option value="">свои цвета</option>` + Object.keys(SK.palettes).map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
 }
 async function activateSkin(id, palette) {
   try { const r = await api(`/api/skins/${id}/activate`, palette ? {palette} : {}); toast(r.applied_now ? "Скин применён на устройстве" : "Скин выбран — устройство возьмёт его при следующем включении или подключении");
@@ -838,7 +857,7 @@ function editFrom(s, quiet) {
   $("#ed-name").value = s.builtin ? "" : s.name; $("#ed-base").value = s.base;
   const stops = STOP_POS.map(p => { const lut = new EyesEngine(); lut.applySkin({palette: s.palette}); const i = Math.round(p * 255) * 3;
     return "#" + [0, 1, 2].map(k => lut.customPal[i + k].toString(16).padStart(2, "0")).join(""); });
-  $("#ed-colors").innerHTML = stops.map((c, i) => `<input type="color" value="${c}" data-i="${i}">`).join("");
+  $("#ed-colors").innerHTML = stops.map((c, i) => `<input type="color" value="${esc(c)}" data-i="${i}">`).join("");
   $$("#ed-colors input").forEach(i => i.oninput = edUpdate);
   $("#ed-pal-preset").value = "";
   $("#ed-eyes-on").checked = !!s.eyes; $("#ed-eyes").style.display = s.eyes ? "" : "none";
@@ -910,9 +929,9 @@ let PE = {active: "", personas: []};
 async function loadPersonas() {
   PE = await api("/api/personas");
   $("#pe-body").textContent = PE.body_rules;
-  $("#pgrid").innerHTML = PE.personas.map(p => `<div class="pc ${p.id === PE.active ? "on" : ""}" data-id="${p.id}">
-    ${p.id === PE.active ? '<span class="badge">ВКЛЮЧЁН</span>' : ""}<b>${p.name}</b><div class="d">${p.desc || ""}</div>
-    ${p.sample ? `<q>${p.sample}</q>` : ""}
+  $("#pgrid").innerHTML = PE.personas.map(p => `<div class="pc ${p.id === PE.active ? "on" : ""}" data-id="${esc(p.id)}">
+    ${p.id === PE.active ? '<span class="badge">ВКЛЮЧЁН</span>' : ""}<b>${esc(p.name)}</b><div class="d">${esc(p.desc || "")}</div>
+    ${p.sample ? `<q>${esc(p.sample)}</q>` : ""}
     <div class="act">${p.id === PE.active ? "" : "<button data-use>Включить</button>"}<button data-ed>${p.builtin ? "Взять за основу" : "Изменить"}</button>${p.builtin ? "" : "<button data-del>✕</button>"}</div></div>`).join("");
   $$("#pgrid .pc").forEach(el => {
     const p = PE.personas.find(x => x.id === el.dataset.id);
@@ -963,7 +982,6 @@ const APIN = {mic_ws: "Микрофон WS", mic_sck: "Микрофон SCK", mi
   din: "DIN (от микрофона)", pa: "Усилитель вкл. (PA)", i2c_sda: "I2C SDA", i2c_scl: "I2C SCL"};
 let HW_DEVICE = "";
 const CAMP = ["d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "xclk", "pclk", "vsync", "href", "sda", "scl", "pwdn", "reset"];
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const pinBox = (id, label, v) => `<div style="width:108px"><label class="f">${label}</label><input type="number" min="-1" max="48" id="${id}" value="${v}"></div>`;
 
 async function loadHw() {
@@ -972,11 +990,11 @@ async function loadHw() {
     HW = r.hardware; HWC = r.catalog; HW_DEVICE = r.device || "";
     const devs = r.devices || [];
     if (HW_DEVICE && !devs.find(d => d.device.toLowerCase() === HW_DEVICE.toLowerCase())) devs.unshift({device: HW_DEVICE, board: HW.board});
-    $("#hw-dev").innerHTML = devs.length ? devs.map(d => `<option value="${d.device}"${d.device.toLowerCase() === HW_DEVICE.toLowerCase() ? " selected" : ""}>${esc(d.device)}${d.board ? " · " + esc(d.board) : ""}</option>`).join("")
+    $("#hw-dev").innerHTML = devs.length ? devs.map(d => `<option value="${esc(d.device)}"${d.device.toLowerCase() === HW_DEVICE.toLowerCase() ? " selected" : ""}>${esc(d.device)}${d.board ? " · " + esc(d.board) : ""}</option>`).join("")
       : `<option value="">устройство ещё не подключалось</option>`;
     const pr = await api("/api/hardware/presets?target=" + (HW.target || "esp32s3"));
     $("#hw-board").innerHTML = `<option value="">— выберите плату —</option>` + Object.entries(pr.presets).filter(([, p]) => p.supported)
-      .sort((a, b) => a[0].localeCompare(b[0])).map(([k]) => `<option value="${k}"${k === HW.board ? " selected" : ""}>${esc(k)}</option>`).join("");
+      .sort((a, b) => a[0].localeCompare(b[0])).map(([k]) => `<option value="${esc(k)}"${k === HW.board ? " selected" : ""}>${esc(k)}</option>`).join("");
     renderHw();
   } catch (e) { toast(e.message, true); }
 }
@@ -1063,7 +1081,7 @@ async function saveHw() {
   collectHw();
   try {
     const r = await api("/api/hardware", {hardware: HW, device: HW_DEVICE}); HW = r.hardware; renderHw();
-    $("#hw-res").style.display = ""; $("#hw-res").textContent = "Сохранено. " + r.applied; toast("Профиль железа сохранён");
+    $("#hw-res").style.display = ""; $("#hw-res").textContent = "Сохранено. " + r.applied + ((r.warnings || []).length ? "\n⚠ " + r.warnings.join("\n⚠ ") : ""); toast("Профиль железа сохранён");
   } catch (e) { $("#hw-res").style.display = ""; $("#hw-res").textContent = "Ошибка: " + e.message; toast(e.message, true); }
 }
 $("#hw-save").onclick = saveHw;
@@ -1167,7 +1185,7 @@ async function wizScan() {
     const r = await api("/api/wizard/ports");
     if (r.job && r.job.state === "running") { wizGo(3); return; }
     if (!r.ports.length) { $("#wiz-ports").innerHTML = `<div class="note">Плата не найдена. Проверьте кабель (некоторые кабели только заряжают), зажмите BOOT и переподключите.</div>`; return; }
-    $("#wiz-ports").innerHTML = r.ports.map(p => `<button class="wiz-port" data-port="${p.port}"><b>${p.port}</b> · ${esc(p.description)}<br><span class="hint">${esc(p.kind)}${p.likely_esp ? " · похоже на ESP32" : ""}</span></button>`).join("");
+    $("#wiz-ports").innerHTML = r.ports.map(p => `<button class="wiz-port" data-port="${esc(p.port)}"><b>${esc(p.port)}</b> · ${esc(p.description)}<br><span class="hint">${esc(p.kind)}${p.likely_esp ? " · похоже на ESP32" : ""}</span></button>`).join("");
     $$(".wiz-port").forEach(b => b.onclick = () => wizProbe(b.dataset.port, b));
   } catch (e) { $("#wiz-ports").innerHTML = `<div class="note bad">${esc(e.message)}</div>`; }
 }
@@ -1189,10 +1207,10 @@ function renderWizInfo() {
   }
   const presets = Object.entries(i.presets || {}).filter(([, p]) => p.supported).sort((a, b) => a[0].localeCompare(b[0]));
   $("#wiz-preset").innerHTML = `<option value="">Своя плата — пины укажу после прошивки</option>` +
-    (det.board ? `<option value="${det.board}">★ ${esc(det.board)} — найдена на плате</option>` : "") +
-    presets.filter(([k]) => k !== det.board).map(([k]) => `<option value="${k}">${esc(k)}</option>`).join("");
+    (det.board ? `<option value="${esc(det.board)}">★ ${esc(det.board)} — найдена на плате</option>` : "") +
+    presets.filter(([k]) => k !== det.board).map(([k]) => `<option value="${esc(k)}">${esc(k)}</option>`).join("");
   $("#wiz-preset").value = det.board || "";
-  $("#wiz-variant").innerHTML = Object.entries(i.variants || {}).map(([k, v]) => `<option value="${k}"${k === i.variant ? " selected" : ""}>${esc(v.label)}</option>`).join("");
+  $("#wiz-variant").innerHTML = Object.entries(i.variants || {}).map(([k, v]) => `<option value="${esc(k)}"${k === i.variant ? " selected" : ""}>${esc(v.label)}</option>`).join("");
   $("#wiz-preset").onchange = wizPresetHint; wizPresetHint();
 }
 function wizPresetHint() {

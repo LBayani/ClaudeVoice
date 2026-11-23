@@ -235,6 +235,9 @@ class DeviceSession(McpClientMixin):
             f"Отреагируй коротко, одной-двумя фразами, в своём характере.)"))
 
     async def on_audio(self, data: bytes):
+        # While the device speaks, its mic mostly hears our own voice (no echo cancellation on most
+        # boards), so audio is dropped: interrupting an answer = wake word, a button / antenna with
+        # "stop", or the device's abort. Speech while the assistant is still thinking does interrupt.
         if not self.listening or self.speaking:
             return
         try:

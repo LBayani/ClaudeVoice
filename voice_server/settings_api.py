@@ -26,10 +26,44 @@ APP_TOOLS = ("self.eyes.", "self.audio_speaker.set_volume", "self.screen.set_bri
              "self.get_device_status", "self.antennae.get_state", "self.reboot", "self.gpio.")
 
 
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+APP_HEADER = "X-CV-App"          # sent by ui/index.html; a cross-site page can't add it without a CORS preflight
+
+
+def _hostname(value: str) -> str:
+    """'127.0.0.1:8765' / '[::1]:8765' / 'localhost' -> bare host name."""
+    v = value.strip().lower()
+    if v.startswith("["):
+        return v[1:v.find("]")] if "]" in v else v
+    return v.rsplit(":", 1)[0] if v.count(":") == 1 else v
+
+
+def refuse_reason(request: web.Request) -> str:
+    """Empty string if the request comes from the app on this PC, else why it is refused."""
+    if request.remote not in ("127.0.0.1", "::1"):
+        return "remote"
+    if _hostname(request.host or "") not in LOCAL_HOSTS:        # DNS rebinding: evil.example -> 127.0.0.1
+        return "host"
+    origin = request.headers.get("Origin")
+    if origin and origin != "null":
+        from urllib.parse import urlsplit
+        if _hostname(urlsplit(origin).netloc) not in LOCAL_HOSTS:
+            return "origin"
+    if request.headers.get("Sec-Fetch-Site", "same-origin") not in ("same-origin", "none"):
+        return "fetch-site"
+    if request.method not in ("GET", "HEAD", "OPTIONS") and request.path.startswith("/api/") \
+            and request.headers.get(APP_HEADER) != "1":                # CSRF: "simple" POSTs from any site
+        return "csrf"
+    return ""
+
+
 @web.middleware
 async def local_only(request: web.Request, handler):
-    if request.path.startswith(("/api/", "/ui")) and request.remote not in ("127.0.0.1", "::1"):
-        raise web.HTTPForbidden(text="ClaudeVoice app is available on this PC only")
+    if request.path.startswith(("/api/", "/ui")):
+        why = refuse_reason(request)
+        if why:
+            log.warning("refused %s %s (%s, Origin=%s)", request.method, request.path, why, request.headers.get("Origin"))
+            raise web.HTTPForbidden(text="ClaudeVoice app is available on this PC only")
     return await handler(request)
 
 
@@ -62,6 +96,7 @@ async def state(request):
                     device[key] = await _device_call(svc, tool, {}, timeout=2.5)
                 except Exception as e:
                     device[key] = {"error": str(e)}
+    from . import pairing
     from .app import OTA_DIR, OTA_FILE, firmware_version
     conf = as_dict(cfg)
     conf["server"]["token"] = "•" * 8 if cfg.server.token else ""
@@ -76,7 +111,7 @@ async def state(request):
         "server": {"started": svc.started, "uptime_s": int(time.time() - svc.started),
                    "ota_url": f"http://{cfg.server.lan_host()}:{cfg.server.port}/xiaozhi/ota/",
                    "discovery": request.app.get("discovery", {})},
-        "config": conf, "device": device,
+        "config": conf, "device": device, "pending_devices": pairing.pending(),
         "ota_firmware": firmware_version(OTA_DIR / OTA_FILE),
         "autostart": winshell.autostart_enabled(), "speakers": SPEAKERS,
     })
@@ -85,6 +120,11 @@ async def state(request):
 async def update_config(request):
     svc = _svc(request)
     changes = await request.json()
+    from .config import locked_keys
+    if not isinstance(changes, dict):
+        raise web.HTTPBadRequest(text="Неверная настройка")
+    if locked := locked_keys(changes):
+        raise web.HTTPBadRequest(text="Это меняется только в config.yaml: " + ", ".join(locked))
     try:
         apply_settings(svc.cfg, changes)
     except (KeyError, TypeError, ValueError) as e:
@@ -131,14 +171,9 @@ async def tts_preview(request):
         raise web.HTTPBadRequest(text="unknown speaker")
     text = (body.get("text") or "Привет! Так звучит мой голос.")[:300]
 
-    def synth():
-        old = svc.cfg.tts.speaker
-        svc.cfg.tts.speaker = speaker
-        try:
-            from .speakable import to_speakable
-            return svc.tts.synth(to_speakable(text))
-        finally:
-            svc.cfg.tts.speaker = old
+    def synth():   # the shared config is not touched: a preview never changes the assistant's voice
+        from .speakable import to_speakable
+        return svc.tts.synth(to_speakable(text), speaker)
 
     pcm = await asyncio.to_thread(synth)
     buf = io.BytesIO()
@@ -184,7 +219,11 @@ async def openai_models(request):
     """Models of the configured OpenAI-compatible server (LM Studio, llama.cpp, ...)."""
     o = _svc(request).cfg.openai
     url = request.query.get("url") or o.url
-    headers = {"Authorization": f"Bearer {o.api_key}"} if o.api_key else {}
+    if not url.lower().startswith(("http://", "https://")):
+        raise web.HTTPBadRequest(text="адрес движка должен начинаться с http:// или https://")
+    # the API key goes only to the engine it was saved for, never to an address from the query string
+    same = url.rstrip("/") == o.url.rstrip("/")
+    headers = {"Authorization": f"Bearer {o.api_key}"} if o.api_key and same else {}
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=4)) as s:
             async with s.get(url.rstrip("/") + "/models", headers=headers) as r:
@@ -280,10 +319,15 @@ async def firmware_upload(request):
     data = await field.read(decode=False)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".bin") as tmp:
         tmp.write(data)
+    from . import flasher
     ver = firmware_version(Path(tmp.name))
-    if not ver:
+    try:
+        if not ver:
+            raise ValueError("нет версии приложения")
+        flasher.check_image(Path(tmp.name))
+    except ValueError as e:
         Path(tmp.name).unlink(missing_ok=True)
-        raise web.HTTPBadRequest(text="Это не файл прошивки ESP32 (xiaozhi.bin).")
+        raise web.HTTPBadRequest(text=f"Это не файл прошивки ESP32 (xiaozhi.bin): {e}.")
     OTA_DIR.mkdir(exist_ok=True)
     Path(tmp.name).replace(OTA_DIR / OTA_FILE)
     log.info("firmware %s uploaded from the app (%d bytes)", ver, len(data))
@@ -441,17 +485,18 @@ async def wizard_start(request):
         if b.get("action") == "backup":
             job = flasher.start_backup(b["port"], b.get("mac", ""), b.get("flash", ""))
         elif b.get("action") == "build":
-            job = flasher.start_build(b["board"])
+            job = flasher.start_build(str(b.get("board", "")))
         elif b.get("action") == "flash":
             job = flasher.start_flash(b["port"], b["board"], bool(b.get("erase")))
         elif b.get("action") == "install":
-            from . import discovery, hardware
+            from . import discovery, hardware, pairing
             svc = _svc(request)
             profile = b.get("profile") or hardware.from_preset(b.get("preset", ""), b.get("target", ""))
             profile["target"] = b.get("target") or profile.get("target", "esp32s3")
             profile = hardware.validate(profile)
             if b.get("mac"):
                 hardware.save(profile, b["mac"])          # the server keeps this board's profile from now on
+                pairing.allow(b["mac"])                   # and lets it in (gets the WebSocket token)
             ota = f"http://{svc.cfg.server.lan_host()}:{svc.cfg.server.port}/xiaozhi/ota/"
             job = flasher.start_install(b["port"], b["variant"], profile, b.get("ssid", ""), b.get("password", ""),
                                         ota, discovery.server_id(), bool(b.get("erase", True)),
@@ -504,7 +549,7 @@ async def hardware_save(request):
             applied = f"Устройство не ответило: {e}"
     elif dev is not None:
         applied = "Прошивка устройства не умеет применять профиль: обновите прошивку."
-    return web.json_response({"hardware": hw, "device": device, "applied": applied})
+    return web.json_response({"hardware": hw, "device": device, "applied": applied, "warnings": hardware.warnings(hw)})
 
 
 async def hardware_reset(request):
@@ -578,6 +623,16 @@ async def personas_activate(request):
     return web.json_response({"active": pid})
 
 
+async def devices_allow(request):
+    """The user lets a new device in (it gets the token on its next OTA check, within a minute)."""
+    from . import pairing
+    body = await request.json()
+    if not pairing._key(body.get("device", "")):
+        raise web.HTTPBadRequest(text="нет устройства")
+    (pairing.allow if body.get("allow", True) else pairing.forget)(body["device"])
+    return web.json_response({"pending": pairing.pending()})
+
+
 async def ui_index(request):
     return web.FileResponse(UI_DIR / "index.html", headers={"Cache-Control": "no-store"})
 
@@ -611,6 +666,7 @@ def setup_routes(app: web.Application):
     r.add_get("/api/hardware/presets", hardware_presets)
     r.add_get("/device/hardware.json", device_hardware)
     r.add_post("/api/tools/call", tools_call)
+    r.add_post("/api/devices/allow", devices_allow)
     r.add_get("/api/wizard/ports", wizard_ports)
     r.add_post("/api/wizard/probe", wizard_probe)
     r.add_get("/api/wizard/job", wizard_job)
